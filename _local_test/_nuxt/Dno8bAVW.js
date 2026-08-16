@@ -1,1 +1,0 @@
-import{Nn as e,gt as t}from"./Jx3ehWvq.js";function n(n){let r=e(!1);function i(){r.value=!0}function a(e){t(()=>{r.value=!1,n?.(e)})}return{isComposing:r,handleCompositionStart:i,handleCompositionEnd:a}}export{n as t};
