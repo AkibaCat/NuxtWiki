@@ -1,0 +1,1 @@
+import{N as e,Un as t,W as n,j as r,kt as i}from"./Jx3ehWvq.js";import{it as a}from"./DIGBsxyx.js";import{n as o}from"./CwAPr3r02.js";import{t as s}from"./Bq5l1gkm2.js";var c=n({__name:`index`,setup(n){a();let{site:c}=o(),l=r(()=>c.value?.home_tag||`HomePage`);return(n,r)=>{let a=s;return i(),e(a,{tag:t(l),key:t(l)},null,8,[`tag`])}}});export{c as default};

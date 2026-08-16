@@ -1,0 +1,1 @@
+import{N as e,Un as t,W as n,j as r,kt as i}from"./Jx3ehWvq.js";import{it as a}from"./DIGBsxyx.js";import{t as o}from"./Bq5l1gkm2.js";var s=n({__name:`index`,setup(n){let s=a(),c=r(()=>String(s.params.tag||``));return(n,r)=>{let a=o;return i(),e(a,{tag:t(c),key:t(c)},null,8,[`tag`])}}});export{s as default};

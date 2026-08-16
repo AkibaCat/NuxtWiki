@@ -1,0 +1,1 @@
+import{w as e}from"./rDKS2Onv.js";var t=()=>e(`color-mode`).value;export{t};
