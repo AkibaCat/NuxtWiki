@@ -15,6 +15,7 @@ final class AuthController
                 'name'        => Settings::siteName(),
                 'description' => Settings::siteDescription(),
                 'home_tag'    => Settings::homeTag(),
+                'site_footer' => Settings::siteFooter(),
             ],
         ]);
     }

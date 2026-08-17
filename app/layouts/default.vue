@@ -162,7 +162,8 @@ const userMenu = computed(() => {
 
     <UFooter>
       <template #left>
-        <p class="text-sm text-muted">
+        <p v-if="site?.site_footer" class="text-sm text-(--ui-muted) whitespace-pre-line">{{ site.site_footer }}</p>
+        <p v-else class="text-sm text-(--ui-muted)">
           © {{ year }} {{ site?.name || 'NuxtWiki' }} · 基于 Nuxt UI 与 PHP/MySQL
         </p>
       </template>

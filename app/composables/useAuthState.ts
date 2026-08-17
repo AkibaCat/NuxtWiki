@@ -2,6 +2,7 @@ export interface SiteInfo {
   name: string
   description: string
   home_tag: string
+  site_footer: string
 }
 
 export interface UserInfo {

@@ -51,6 +51,7 @@ const saveSettings = async () => {
       auth.site.value.name = settings.value.site_name
       auth.site.value.description = settings.value.site_description
       auth.site.value.home_tag = settings.value.home_tag
+      auth.site.value.site_footer = settings.value.site_footer
     }
   } else {
     toast.add({ title: r.error?.message || '保存失败', color: 'error' })
@@ -75,6 +76,58 @@ const deletePage = async (tag: string) => {
     await loadStats()
   } else {
     toast.add({ title: r.error?.message || '删除失败', color: 'error' })
+  }
+}
+
+// ============ 页面权限设置弹窗 ============
+// 页面权限等级选项（0 访客 / 1 管理员 / 2 高级 / 3 普通）
+const aclLevelOptions = [
+  { label: '访客（未登录）', value: 0 },
+  { label: '管理员', value: 1 },
+  { label: '高级用户', value: 2 },
+  { label: '普通用户', value: 3 }
+]
+const permDefs = [
+  { key: 'read', label: '阅读权限', icon: 'i-lucide-eye', hint: '谁可以阅读本页面', def: 0 },
+  { key: 'edit', label: '编辑权限', icon: 'i-lucide-pencil', hint: '谁可以编辑本页面', def: 3 },
+  { key: 'history', label: '历史权限', icon: 'i-lucide-history', hint: '谁可以查看修订历史', def: 3 },
+  { key: 'diff', label: '对比权限', icon: 'i-lucide-git-compare', hint: '谁可以对比版本差异', def: 2 },
+  { key: 'backlinks', label: '回链权限', icon: 'i-lucide-link', hint: '谁可以查看反向链接', def: 3 },
+  { key: 'acl', label: '权限管理', icon: 'i-lucide-shield', hint: '谁可以修改本页权限', def: 1 },
+  { key: 'contributors', label: '贡献者', icon: 'i-lucide-users', hint: '谁可以查看贡献者列表', def: 0 }
+]
+const aclModalOpen = ref(false)
+const aclTarget = ref<any>(null)
+const aclPerms = reactive<Record<string, number>>({})
+const aclSaving = ref(false)
+
+const openAclModal = async (row: any) => {
+  aclTarget.value = row
+  for (const p of permDefs) aclPerms[p.key] = p.def
+  const r = await api.get('page.perms', { tag: row.tag })
+  if (r.ok) {
+    const d = r.data as any
+    for (const p of permDefs) {
+      const v = Number(d['acl_' + p.key])
+      aclPerms[p.key] = v >= 0 && v <= 3 ? v : p.def
+    }
+  } else {
+    toast.add({ title: r.error?.message || '加载权限失败', color: 'error' })
+  }
+  aclModalOpen.value = true
+}
+const saveAcl = async () => {
+  if (!aclTarget.value) return
+  aclSaving.value = true
+  const payload: Record<string, number> = { tag: aclTarget.value.tag }
+  for (const p of permDefs) payload['acl_' + p.key] = aclPerms[p.key]
+  const r = await api.post('page.update-acl', payload)
+  aclSaving.value = false
+  if (r.ok) {
+    toast.add({ title: '权限已更新', color: 'success' })
+    aclModalOpen.value = false
+  } else {
+    toast.add({ title: r.error?.message || '保存失败', color: 'error' })
   }
 }
 
@@ -333,8 +386,8 @@ const statCards = computed(() => {
               <UFormField label="站点描述">
                 <UTextarea v-model="settings.site_description" :rows="2" class="w-full" />
               </UFormField>
-              <UFormField label="站点基础 URL" hint="用于邮件通知中的链接">
-                <UInput v-model="settings.base_url" placeholder="https://example.com" class="w-full" />
+              <UFormField label="页脚内容" hint="显示在网站底部，可换行，留空则显示默认页脚">
+                <UTextarea v-model="settings.site_footer" :rows="3" class="w-full" />
               </UFormField>
               <div class="grid md:grid-cols-2 gap-4">
                 <UFormField label="默认阅读权限等级">
@@ -419,7 +472,6 @@ const statCards = computed(() => {
                 { accessorKey: 'hits', header: '阅读' },
                 { accessorKey: 'last_editor', header: '编辑者' },
                 { accessorKey: 'updated_at', header: '更新' },
-                { accessorKey: 'acl', header: 'ACL' },
                 { accessorKey: 'actions', header: '操作', enableSorting: false }
               ]"
             >
@@ -433,19 +485,51 @@ const statCards = computed(() => {
               </template>
               <template #actions-cell="{ row }">
                 <div class="flex items-center gap-1">
+                  <UButton icon="i-lucide-shield" size="xs" color="neutral" variant="ghost" aria-label="权限设置" @click="openAclModal(row.original)" />
                   <UButton :to="`/${row.original.tag}/edit`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" aria-label="编辑" />
                   <UButton icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" aria-label="删除" @click="deletePage(row.original.tag)" />
                 </div>
               </template>
             </UTable>
           </UCard>
+          <!-- 页面权限设置弹窗 -->
+          <UModal v-model:open="aclModalOpen">
+            <template #content>
+              <UCard>
+                <template #header>权限设置 · {{ aclTarget?.tag }}</template>
+                <div class="space-y-4">
+                  <UFormField
+                    v-for="p in permDefs"
+                    :key="p.key"
+                    :label="`${p.label} [${aclPerms[p.key]}]`"
+                    :hint="p.hint"
+                  >
+                    <USelect v-model="aclPerms[p.key]" :items="aclLevelOptions" class="w-full" />
+                  </UFormField>
+                  <UAlert
+                    color="info"
+                    variant="subtle"
+                    icon="i-lucide-info"
+                    title="权限等级说明"
+                    description="等级数字越小代表越宽松：0 = 访客（未登录），1 = 管理员，2 = 高级用户，3 = 普通用户。选中某项即代表该等级及更高级的用户可执行此操作（管理员拥有最高权限）。"
+                  />
+                </div>
+                <template #footer>
+                  <div class="flex justify-end gap-2">
+                    <UButton variant="subtle" color="neutral" @click="aclModalOpen = false">取消</UButton>
+                    <UButton icon="i-lucide-save" :loading="aclSaving" @click="saveAcl">保存权限</UButton>
+                  </div>
+                </template>
+              </UCard>
+            </template>
+          </UModal>
         </template>
 
         <template #users>
           <div class="flex items-center justify-between mt-4 mb-3 gap-3">
             <h2 class="font-semibold shrink-0">用户列表 ({{ users.length }})</h2>
             <div class="flex items-center gap-2 ml-auto">
-              <UInput v-model="userSearch" placeholder="按用户名/昵称搜索…" icon="i-lucide-search" class="w-56" clearable @update:model-value="loadUsers" />
+              <UInput v-model="userSearch" placeholder="按用户名搜索…" icon="i-lucide-search" class="w-56" clearable @update:model-value="loadUsers" />
               <UButton v-if="!showCreate" icon="i-lucide-user-plus" size="sm" @click="showCreate = true">新建用户</UButton>
             </div>
           </div>
@@ -472,7 +556,6 @@ const statCards = computed(() => {
               :loading="usersLoading"
               :columns="[
                 { accessorKey: 'username', header: '用户名' },
-                { accessorKey: 'nickname', header: '昵称' },
                 { accessorKey: 'role', header: '账号权限' },
                 { accessorKey: 'reason', header: '原因' },
                 { accessorKey: 'created_at', header: '注册时间' },
@@ -500,7 +583,7 @@ const statCards = computed(() => {
               <template #created_at-cell="{ row }">
                 {{ formatDate(row.original.created_at) }}
               </template>
-              <!-- 操作列：冻结/封禁/解冻/解封/删除；宽度不足时仅显示图标 -->
+              <!-- 操作列：冻结/解冻/封禁/解封/删除；宽度不足时仅显示图标 -->
               <template #actions-cell="{ row }">
                 <div class="flex items-center gap-1">
                   <template v-if="row.original.username !== user?.username">
@@ -516,17 +599,6 @@ const statCards = computed(() => {
                       <span class="hidden xl:inline">冻结</span>
                     </UButton>
                     <UButton
-                      v-if="row.original.status !== 'banned'"
-                      icon="i-lucide-ban"
-                      size="xs"
-                      color="error"
-                      variant="ghost"
-                      aria-label="封禁"
-                      @click="openStatusModal(row.original, 'banned')"
-                    >
-                      <span class="hidden xl:inline">封禁</span>
-                    </UButton>
-                    <UButton
                       v-if="row.original.status === 'frozen'"
                       icon="i-lucide-check"
                       size="xs"
@@ -536,6 +608,17 @@ const statCards = computed(() => {
                       @click="setUserStatus(row.original, 'active')"
                     >
                       <span class="hidden xl:inline">解冻</span>
+                    </UButton>
+                    <UButton
+                      v-if="row.original.status !== 'banned'"
+                      icon="i-lucide-ban"
+                      size="xs"
+                      color="error"
+                      variant="ghost"
+                      aria-label="封禁"
+                      @click="openStatusModal(row.original, 'banned')"
+                    >
+                      <span class="hidden xl:inline">封禁</span>
                     </UButton>
                     <UButton
                       v-if="row.original.status === 'banned'"

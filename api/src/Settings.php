@@ -56,6 +56,11 @@ final class Settings
         return self::get('site_description', app_config()['site']['description'] ?? '');
     }
 
+    public static function siteFooter(): string
+    {
+        return self::get('site_footer', '');
+    }
+
     public static function homeTag(): string
     {
         return self::get('home_tag', app_config()['site']['home_tag'] ?? 'HomePage');

@@ -18,6 +18,7 @@
  *   分隔线    --- / *** / ___
  *   内部链接  [[Page]] 或 [[文本|Page]]
  *   外部链接  [文本](url)
+ *   自定义高亮 [{文本|颜色}]   颜色支持 6 位十六进制（3c9c5c）或 RGB（60:156:92）
  *   图片附件  ![说明|文件名](文件名.jpg)   或  {{说明|文件名}} / {{文件名}}
  *   HTML     白名单标签（div/section/details/table/span/mark/kbd/sup/sub/a/img/iframe 等），
  *            内部可继续嵌套 Markdown；危险标签与事件属性自动过滤
@@ -274,6 +275,23 @@ const makeTokens = (opts: RenderOptions): InlineToken[] => {
           return `<img src="${esc(att(url))}" alt="${esc(alt)}" loading="lazy" />`
         }
         return `<a href="${esc(att(url))}" class="attachment" download>${parseInline(url, o)}</a>`
+      }
+    },
+    // 自定义高亮 [{文本|颜色}] —— 颜色支持 6 位十六进制（3c9c5c）或 RGB（60:156:92）
+    {
+      re: /\[\{([^\]\n]+)\|(#?[0-9a-fA-F]{3,6}|\d{1,3}:\d{1,3}:\d{1,3})\}\]/,
+      render: (m, o) => {
+        const text = (m[1] ?? '').trim()
+        const color = (m[2] ?? '').trim()
+        let css = ''
+        if (/^#?[0-9a-fA-F]{3,6}$/.test(color)) {
+          css = `color:${color[0] === '#' ? color : '#' + color};`
+        } else {
+          const [r, g, b] = color.split(':').map(Number)
+          if (r === undefined || g === undefined || b === undefined || r > 255 || g > 255 || b > 255) return m[0]
+          css = `color:rgb(${r},${g},${b});`
+        }
+        return `<span style="${css}">${parseInline(text, o)}</span>`
       }
     },
     // 内部链接 [[Page]] / [[文本|Page]]

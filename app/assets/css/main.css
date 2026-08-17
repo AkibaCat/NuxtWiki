@@ -92,3 +92,6 @@
 .wiki-content a:hover { color: var(--ui-primary); opacity: 0.8; }
 .wiki-content del { opacity: 0.6; }
 .wiki-content sup, .wiki-content sub { font-size: 0.75em; }
+/* details/summary：折叠面板 summary 显示为可点击样式 */
+.wiki-content details { margin: 0.5em 0; }
+.wiki-content details > summary { cursor: pointer; }

@@ -132,7 +132,7 @@ if ($method === 'POST') {
         $now = date('Y-m-d H:i:s');
         $settings = [
             'site_name' => $siteName, 'site_description' => '一个基于 Nuxt UI 与 PHP/MySQL 的轻量 Wiki。',
-            'base_url' => '', 'home_tag' => $homeTag, 'language' => 'zh-CN',
+            'site_footer' => '', 'home_tag' => $homeTag, 'language' => 'zh-CN',
             'allow_registration' => '1',
             'default_read_level' => '0', 'default_edit_level' => '3', 'default_history_level' => '3',
             'default_diff_level' => '2', 'default_backlinks_level' => '3', 'default_perms_level' => '1',
@@ -165,51 +165,64 @@ $siteName 采用「纯静态前端 + PHP API」架构：前端由 Nuxt 构建为
 
 ### 核心特性
 
-<details>\n<summary>Markdown 编辑</summary>
+<details>
+<summary>Markdown 编辑</summary>
 
-- 标准语法：标题、加粗、斜体、列表、表格、引用、代码块、分割线\n- 代码语法高亮与一键复制\n- 支持 **HTML 白名单标签嵌套**：在 `div`、`details`、`table`、`span`、`mark` 等标签内部可以继续书写 Markdown，例如下面这个 `div` 容器：
+- 标准语法：标题、加粗、斜体、列表、表格、引用、代码块、分割线
+- 代码语法高亮与一键复制
+- 自定义文本高亮：使用 `[{文本|颜色}]` 为文字着色，支持十六进制（如 `3c9c5c`）与 RGB（如 `60:156:92`），例如 [{NuxtWiki|00dc82}]
+- 支持 **HTML 白名单标签嵌套**：在 `div`、`details`、`table`、`span`、`mark` 等标签内部可以继续书写 Markdown，例如下面这个 `div` 容器：
 
 <div class='wiki-note' style='border:1px solid #e5e7eb;border-radius:8px;padding:8px 16px;background:#f6f8fa'>
 
 > 这是放在 `div` 容器里的一段引用，内部的 **Markdown 依然有效**。
 
-- 项目一\n- 项目二
+- 项目一
+- 项目二
 
 </div>
 
 </details>
 
-<details>\n<summary>版本管理</summary>
+<details>
+<summary>版本管理</summary>
 
-- 每次保存自动保留修订记录\n- 随时查看历史、对比差异、一键回滚
-
-</details>
-
-<details>\n<summary>发现与检索</summary>
-
-- 全文搜索、最近更改、随机页面\n- 反向链接、贡献者榜
+- 每次保存自动保留修订记录
+- 随时查看历史、对比差异、一键回滚
 
 </details>
 
-<details>\n<summary>访问控制（ACL）</summary>
+<details>
+<summary>发现与检索</summary>
+
+- 全文搜索、最近更改、随机页面
+- 反向链接、贡献者榜
+
+</details>
+
+<details>
+<summary>访问控制（ACL）</summary>
 
 按页面分别设置阅读、编辑、历史、对比、回链、权限与贡献者的等级门槛，精细控制谁可以看、谁可以改。
 
 </details>
 
-<details>\n<summary>订阅通知</summary>
+<details>
+<summary>订阅通知</summary>
 
 订阅关注的页面，更新后第一时间收到通知。
 
 </details>
 
-<details>\n<summary>用户体系</summary>
+<details>
+<summary>用户体系</summary>
 
 注册码开放注册，个人主页支持头像、简介、社交链接与活跃度图。
 
 </details>
 
-<details>\n<summary>管理后台</summary>
+<details>
+<summary>管理后台</summary>
 
 站点统计、站点设置、页面 / 用户 / 注册码管理，以及数据备份与导入。
 
@@ -217,13 +230,16 @@ $siteName 采用「纯静态前端 + PHP API」架构：前端由 Nuxt 构建为
 
 ### 快速开始
 
-1. 点击右上角「登录」，使用安装时设置的管理员账号登录\n2. 点击「创建页面」或右上角「新建」，写下你的第一篇文档\n3. 对照 [[语法帮助|GrammarHelp]] 学习完整的编辑语法\n4. 在页面详情页点击「订阅」，持续关注页面更新
+1. 点击右上角「登录」，使用安装时设置的管理员账号登录
+2. 点击「创建页面」或右上角「新建」，写下你的第一篇文档
+3. 对照 [[语法帮助|GrammarHelp]] 学习完整的编辑语法
+4. 在页面详情页点击「订阅」，持续关注页面更新
 
 ### 相关页面
 
 - [[语法帮助|GrammarHelp]] —— 完整的 Markdown 与 HTML 嵌套语法教学
 
-> 提示：本页内容可随时编辑，从这里开始你的 Wiki 之旅吧！"
+> 提示：本页内容可随时编辑，从这里开始你的 Wiki 之旅吧！
 BODY;
         $st = $pdo->prepare('INSERT INTO pages (tag, title, body, created_at, updated_at, revision, acl_read, acl_edit, acl_history, acl_diff, acl_backlinks, acl_acl, acl_contributors) VALUES (?, ?, ?, ?, ?, 1, \'0\', \'3\', \'3\', \'2\', \'3\', \'1\', \'0\')');
         $st->execute([$homeTag, "欢迎使用 $siteName", $homeBody, $now, $now]);
@@ -256,6 +272,16 @@ BODY;
 - `__下划线__` → __下划线__
 - `~~删除线~~` → ~~删除线~~
 - `` `行内代码` `` → `行内代码`
+
+## 自定义着色
+
+使用 `[{文本|颜色}]` 语法为文字着色，颜色支持 **6 位十六进制** 或 **RGB** 两种写法：
+
+- 十六进制：`[{示例|3c9c5c}]` → [{示例|3c9c5c}]
+- RGB：`[{示例|60:156:92}]` → [{示例|60:156:92}]
+- 高亮内部仍可使用行内语法：`[{**加粗**|ff6b00}]` → [{**加粗**|ff6b00}]
+
+> 说明：十六进制可省略 `#` 前缀（`3c9c5c` 与 `#3c9c5c` 等价）；RGB 使用英文冒号分隔（红:绿:蓝），取值 0–255。
 
 ## 列表
 
@@ -330,6 +356,8 @@ console.log('Hello, NuxtWiki!');
 - 列表项 B
 
 </details>
+
+> 提示：鼠标悬停在折叠面板的「summary」标题上会显示手型指针，表示可点击展开 / 收起。
 
 ### 原生 HTML 表格
 

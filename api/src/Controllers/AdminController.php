@@ -28,7 +28,7 @@ final class AdminController
     {
         Auth::requireAdmin();
         $keys = [
-            'site_name', 'site_description', 'base_url', 'home_tag', 'language',
+            'site_name', 'site_description', 'site_footer', 'home_tag', 'language',
             'allow_registration', 'default_read_level', 'default_edit_level', 'default_history_level',
             'default_diff_level', 'default_backlinks_level', 'default_perms_level', 'default_contributors_level',
         ];
@@ -47,7 +47,7 @@ final class AdminController
         Auth::verifyCsrf();
         $b = Response::body();
         $keys = [
-            'site_name', 'site_description', 'base_url', 'home_tag', 'language',
+            'site_name', 'site_description', 'site_footer', 'home_tag', 'language',
             'allow_registration', 'default_read_level', 'default_edit_level', 'default_history_level',
             'default_diff_level', 'default_backlinks_level', 'default_perms_level', 'default_contributors_level',
         ];
