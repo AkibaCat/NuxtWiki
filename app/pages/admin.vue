@@ -120,7 +120,7 @@ const saveAcl = async () => {
   if (!aclTarget.value) return
   aclSaving.value = true
   const payload: Record<string, number> = { tag: aclTarget.value.tag }
-  for (const p of permDefs) payload['acl_' + p.key] = aclPerms[p.key]
+  for (const p of permDefs) payload['acl_' + p.key] = aclPerms[p.key]!
   const r = await api.post('page.update-acl', payload)
   aclSaving.value = false
   if (r.ok) {
@@ -431,7 +431,7 @@ const statCards = computed(() => {
               <UButton icon="i-lucide-plus" :loading="regcodeBusy" @click="generateRegcodes">生成</UButton>
             </div>
           </div>
-          <UCard :ui="{ body: { padding: 'p-0' } }">
+          <UCard :ui="{ body: 'p-0' }">
             <UTable
               :data="regcodes"
               :loading="regcodesLoading"
@@ -461,7 +461,7 @@ const statCards = computed(() => {
         </template>
 
         <template #pages>
-          <UCard class="mt-4" :ui="{ body: { padding: 'p-0' } }">
+          <UCard class="mt-4" :ui="{ body: 'p-0' }">
             <UTable
               :data="adminPages"
               :loading="pagesLoading"
@@ -550,7 +550,7 @@ const statCards = computed(() => {
               <UButton color="neutral" variant="ghost" @click="showCreate = false">取消</UButton>
             </div>
           </UCard>
-          <UCard :ui="{ body: { padding: 'p-0' } }">
+          <UCard :ui="{ body: 'p-0' }">
             <UTable
               :data="users"
               :loading="usersLoading"

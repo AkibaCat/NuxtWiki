@@ -52,7 +52,7 @@ const undo = () => {
   if (h.length <= 1) return
   redoStack.value.push(body.value)
   h.pop()
-  body.value = h[h.length - 1]
+  body.value = h[h.length - 1]!
   lastInput = 0
   focusEnd()
 }

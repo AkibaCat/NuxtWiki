@@ -82,7 +82,7 @@ const fmt = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 // 用插值分位数划分 4 档活跃度（避免少量活跃被误判为高活跃）
-const activityLevels = computed(() => {
+const activityLevels = computed<[number, number, number, number]>(() => {
   const counts = Object.values(activity.value).filter((c) => c > 0).sort((a, b) => a - b)
   if (!counts.length) return [0, 0, 0, 0]
   // 线性插值分位数（与常见统计软件一致），max 取实际最大值
@@ -90,10 +90,10 @@ const activityLevels = computed(() => {
     const pos = p * (counts.length - 1)
     const lo = Math.floor(pos)
     const hi = Math.ceil(pos)
-    if (lo === hi) return counts[lo]
-    return counts[lo] + (counts[hi] - counts[lo]) * (pos - lo)
+    if (lo === hi) return counts[lo]!
+    return counts[lo]! + (counts[hi]! - counts[lo]!) * (pos - lo)
   }
-  return [q(0.25), q(0.5), q(0.75), counts[counts.length - 1]]
+  return [q(0.25), q(0.5), q(0.75), counts[counts.length - 1]!]
 })
 
 // 只有当数值真正高于上一档阈值时才提升等级，避免低活跃整体显示为高活跃色
@@ -131,12 +131,12 @@ const totalContributions = computed(() => Object.values(activity.value).reduce((
 const monthLabels = computed(() => {
   const labels: { col: number; label: string }[] = []
   const monthName = (d: Date) =>
-    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]
+    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]!
   let prev = -1
   weeks.value.forEach((week, i) => {
-    const m = week[0].date.getMonth()
+    const m = week[0]!.date.getMonth()
     if (m !== prev) {
-      labels.push({ col: i, label: monthName(week[0].date) })
+      labels.push({ col: i, label: monthName(week[0]!.date) })
       prev = m
     }
   })

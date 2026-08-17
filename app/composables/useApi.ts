@@ -5,7 +5,7 @@ export interface ApiError {
   message: string
 }
 
-export interface ApiResult<T = unknown> {
+export interface ApiResult<T = any> {
   ok: boolean
   status: number
   data?: T
@@ -32,7 +32,7 @@ export const useApi = () => {
     return url.toString()
   }
 
-  const request = async <T = unknown>(
+  const request = async <T = any>(
     action: string,
     opts: {
       method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -76,13 +76,13 @@ export const useApi = () => {
     return { ok: false, status: res.status, error: { code: 'NETWORK', message: '无法连接到服务器' } }
   }
 
-  const get = <T = unknown>(action: string, query?: Record<string, string | number | undefined>) =>
+  const get = <T = any>(action: string, query?: Record<string, string | number | undefined>) =>
     request<T>(action, { method: 'GET', query })
 
-  const post = <T = unknown>(action: string, body?: Record<string, unknown> | unknown[], opts?: { query?: Record<string, string | number | undefined>, skipCsrf?: boolean }) =>
+  const post = <T = any>(action: string, body?: Record<string, unknown> | unknown[], opts?: { query?: Record<string, string | number | undefined>, skipCsrf?: boolean }) =>
     request<T>(action, { method: 'POST', body, ...opts })
 
-  const postForm = <T = unknown>(action: string, formData: FormData) =>
+  const postForm = <T = any>(action: string, formData: FormData) =>
     request<T>(action, { method: 'POST', formData })
 
   return { request, get, post, postForm, base }

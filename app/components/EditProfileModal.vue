@@ -17,7 +17,7 @@ const form = reactive({
   socials: { qq: '', wechat: '', bilibili: '', youtube: '', github: '', x: '' },
 })
 
-const socialDefs = [
+const socialDefs: { key: keyof typeof form.socials; label: string; icon: string; placeholder: string }[] = [
   { key: 'qq', label: 'QQ', icon: 'i-simple-icons-qq', placeholder: 'QQ 号码' },
   { key: 'wechat', label: 'WeChat', icon: 'i-simple-icons-wechat', placeholder: '微信号' },
   { key: 'bilibili', label: 'BiliBili', icon: 'i-simple-icons-bilibili', placeholder: '哔哩哔哩主页链接' },

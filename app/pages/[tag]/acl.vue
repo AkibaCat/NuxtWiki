@@ -49,8 +49,8 @@ onMounted(async () => {
 
 const save = async () => {
   saving.value = true
-  const payload: Record<string, number> = { tag: tag.value }
-  for (const p of permDefs) payload['acl_' + p.key] = perms[p.key]
+  const payload: Record<string, string | number> = { tag: tag.value }
+  for (const p of permDefs) payload['acl_' + p.key] = perms[p.key]!
   const r = await api.post('page.update-acl', payload)
   saving.value = false
   if (r.ok) {
