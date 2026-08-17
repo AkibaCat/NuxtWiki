@@ -5,14 +5,14 @@ export default defineNuxtConfig({
     '@nuxt/ui'
   ],
 
+  // SPA 模式：Kangle 静态部署（纯前端 + PHP API）
+  ssr: false,
+
   devtools: {
     enabled: true
   },
 
   css: ['~/assets/css/main.css'],
-
-  // SPA 模式：Kangle 静态部署（纯前端 + PHP API）
-  ssr: false,
 
   // 运行时配置（生产可用 NUXT_PUBLIC_API_BASE 覆盖）
   runtimeConfig: {
@@ -34,14 +34,5 @@ export default defineNuxtConfig({
     }
   },
 
-  compatibilityDate: '2026-06-30',
-
-  eslint: {
-    config: {
-      stylistic: {
-        commaDangle: 'never',
-        braceStyle: '1tbs'
-      }
-    }
-  }
+  compatibilityDate: '2026-06-30'
 })
