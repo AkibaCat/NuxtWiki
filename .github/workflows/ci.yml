@@ -32,7 +32,7 @@ jobs:
       - name: PHP 语法检查
         run: find api -name '*.php' -print0 | xargs -0 -n1 php -l
 
-  # 构建部署包：静态前端 + PHP 后端 → 打包为 tar.gz
+  # 构建部署包：复用 build-deploy.sh（静态前端 + PHP 后端 → tar.gz，压缩包内直接是产物）
   build-package:
     needs: ci
     runs-on: ubuntu-latest
@@ -50,21 +50,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: 安装依赖
-        run: pnpm install
+      - name: 运行构建打包脚本
+        run: bash ./build-deploy.sh
 
-      - name: 生成静态前端
-        run: pnpm generate
-
-      - name: 组装部署包
-        run: |
-          # 前端：nuxt generate 产物（含 index.html、_nuxt、_fonts、.htaccess）复制到 dist 根
-          mkdir -p dist
-          cp -r .output/public/. dist/
-          # 后端：整个 api 目录复制到 dist/api
-          cp -r api dist/api
-          # 移除安装向导生成 / 本地测试文件（config.php、data、uploads 由安装时自动创建）
-          rm -rf dist/api/config.php dist/api/data dist/api/uploads
-          rm -f dist/api/_seed_test.php dist/api/_smoke.php
-          # 生成 tar.gz，便于服务器直接解压到站点根目录
-          cd dist && tar -czf ../nuxtwiki-deploy.tar.gz . && cd ..
+      - name: 上传部署包
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuxtwiki-deploy
+          path: deploy/*.tar.gz

@@ -149,7 +149,7 @@ if ($method === 'POST') {
 
         // 4) 生成首页（Wiki 介绍与说明）
         $pageId = (int)$pdo->lastInsertId();
-        $homeBody = <<<'BODY'
+        $homeBody = <<<BODY
 ## 欢迎使用 $siteName
 
 [![Nuxt v4](https://img.shields.io/badge/Made%20with-Nuxt%20v4-00DC82?logo=nuxt&labelColor=020420)](https://nuxt.com)
@@ -249,7 +249,7 @@ BODY;
         // 5) 语法教学页
         $helpTag = 'GrammarHelp';
         $helpTitle = '语法帮助';
-        $helpBody = <<<'BODY'
+        $helpBody = <<<BODY
 > 本页介绍本站支持的完整编辑语法，可直接复制示例进行练习。
 
 ## 标题

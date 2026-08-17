@@ -3,6 +3,9 @@ api/config.php
 api/data/
 api/uploads/
 
+# build-deploy.sh build artifacts
+deploy/
+
 # Nuxt dev/build outputs
 .output
 .data
