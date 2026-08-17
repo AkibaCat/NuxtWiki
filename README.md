@@ -35,11 +35,11 @@
   │  https://你域名/           静态 SPA（index.html + _nuxt + _fonts）
   │  https://你域名/api/...     PHP 后端（index.php?r=controller.action）
   ▼
-┌─────────────┐       ┌──────────────────────────────┐
-│  静态资源服务器 │       │          PHP 后端               │
-│  Nginx/Apache │       │  index.php → Router → Controller │
-│  / Kangle     │       │  PDO 直连数据库                 │
-└─────────────┘       └──────────┬───────────────┬───────┘
+┌────────────────┐       ┌──────────────────────────────────┐
+│  静态资源服务器 │       │              PHP 后端            │
+│  Nginx/Apache  │       │  index.php → Router → Controller │
+│  / Kangle      │       │  PDO 直连数据库                   │
+└────────────────┘       └──────────┬───────────────┬───────┘
                                  │               │
                           MySQL（生产）      SQLite（本地）
 ```
