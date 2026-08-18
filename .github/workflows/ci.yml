@@ -57,4 +57,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./deploy/publish   # 直接使用构建好的目录
           # publish_branch: gh-pages       # 默认就是 gh-pages
-          # force_orphan: true             # 如需每次完全覆盖历史
+          force_orphan: true             # 如需每次完全覆盖历史

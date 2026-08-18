@@ -568,7 +568,7 @@ const statCards = computed(() => {
               <template #actions-cell="{ row }">
                 <div class="flex items-center gap-1">
                   <UButton icon="i-lucide-shield" size="xs" color="neutral" variant="ghost" aria-label="权限设置" @click="openAclModal(row.original)" />
-                  <UButton :to="`/${row.original.tag}/edit`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" aria-label="编辑" />
+                  <UButton :to="`/editor?open=${encodeURIComponent(row.original.tag)}`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" aria-label="编辑" />
                   <UButton icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" aria-label="删除" @click="deletePage(row.original.tag)" />
                 </div>
               </template>

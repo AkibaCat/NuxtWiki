@@ -10,8 +10,9 @@ const page = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
 
-// ==================== 页面标题（随页面数据动态更新） ====================
+// ==================== 页面标题（写入全局覆盖，由布局统一输出） ====================
 const siteName = computed(() => site.value?.name || 'NuxtWiki')
+const { setTitle } = useWikiTitle()
 // 站点首页特殊页：命中 home_tag / Home / HomePage 即视为站点首页，固定显示「首页」
 const isHome = computed(() => !!page.value?.page && (props.tag === site.value?.home_tag || props.tag === 'Home' || props.tag === 'HomePage'))
 
@@ -23,7 +24,11 @@ const pageTitle = computed(() => {
   return `${siteName.value} | ${title}`
 })
 
-useHead({ title: computed(() => pageTitle.value || null) })
+watch(pageTitle, (v) => setTitle(v), { immediate: true })
+onUnmounted(() => setTitle(null))
+
+// ==================== 目录（TOC）：状态写入 + 跳转逻辑 ====================
+const { setToc, scrollToHeading } = useToc()
 
 // 订阅
 const watching = ref(false)
@@ -86,6 +91,11 @@ const rendered = computed(() => {
   return renderWiki(page.value.page.body, { tag: page.value.page.tag })
 })
 
+// 目录数据写入全局（供布局移动端「此页目录」下拉浮窗读取）；离开页面时清空
+watch(() => rendered.value?.toc, (toc) => setToc(toc), { immediate: true })
+onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
+onUnmounted(() => setToc([]))
+
 const canEdit = computed(() => page.value?.can_edit)
 const canHistory = computed(() => page.value?.can_history)
 const canDiff = computed(() => page.value?.can_diff)
@@ -122,7 +132,7 @@ const toggleWatch = async () => {
       <UIcon name="i-lucide-file-question" class="size-12 text-(--ui-muted) mb-4" />
       <h1 class="text-2xl font-bold mb-2">{{ page.tag }}</h1>
       <p class="text-(--ui-muted) mb-6">该页面尚未创建。</p>
-      <UButton v-if="canEdit" :to="`/${page.tag}/edit`" icon="i-lucide-plus" label="创建此页面" />
+      <UButton v-if="canEdit" :to="`/editor?open=${encodeURIComponent(page.tag)}`" icon="i-lucide-plus" label="创建此页面" />
     </div>
 
     <!-- 桌面端三栏：左=所有页面导航 / 中=页面内容(保持居中) / 右=本页内容导航；移动端仅显示内容 -->
@@ -180,7 +190,7 @@ const toggleWatch = async () => {
 
         <!-- 操作按钮（移动端可横向滚动） -->
         <div class="flex items-center gap-1 mb-6 border-b border-b-(--ui-border) pb-3 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <UButton v-if="canEdit" :to="`/${page.page.tag}/edit`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" label="编辑" />
+          <UButton v-if="canEdit" :to="`/editor?open=${encodeURIComponent(page.page.tag)}`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" label="编辑" />
           <UButton v-if="canHistory" :to="`/${page.page.tag}/history`" icon="i-lucide-history" size="xs" color="neutral" variant="ghost" label="历史" />
           <UButton v-if="canDiff" :to="`/${page.page.tag}/diff`" icon="i-lucide-git-compare" size="xs" color="neutral" variant="ghost" label="对比" />
           <UButton v-if="canBacklinks" :to="`/${page.page.tag}/backlinks`" icon="i-lucide-link" size="xs" color="neutral" variant="ghost" label="回链" />
@@ -188,29 +198,24 @@ const toggleWatch = async () => {
           <UButton v-if="canContributors" :to="`/${page.page.tag}/contributors`" icon="i-lucide-users" size="xs" color="neutral" variant="ghost" label="贡献者" />
         </div>
 
-        <!-- 窄屏（xl 以下不显示左右侧栏）时，本页目录显示在正文内容顶部 -->
-        <div v-if="rendered?.toc?.length" class="xl:hidden mb-6 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4 text-sm">
-          <p class="font-semibold mb-2">本页目录</p>
-          <nav>
-            <a
-              v-for="item in rendered.toc"
-              :key="item.id"
-              :href="`#${item.id}`"
-              :style="{ paddingLeft: `${(item.level - 2) * 16}px` }"
-              class="block py-0.5 text-(--ui-muted) hover:text-(--ui-primary) no-underline transition-colors"
-              v-html="item.text"
-            />
-          </nav>
-        </div>
-
-        <!-- 页面内容 -->
         <div class="wiki-content" v-html="rendered?.html"></div>
       </article>
 
       <!-- 桌面端右侧：本页内容导航（固定显示，识别 2 级 3 级标题生成跳转） -->
       <aside class="hidden xl:flex xl:justify-start xl:sticky xl:top-24 xl:self-start">
         <div class="w-full max-w-56 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4 text-sm max-h-[calc(100vh-7rem)] overflow-y-auto">
-          <p class="font-semibold mb-2">本页目录</p>
+          <p class="font-semibold mb-2 flex items-center justify-between gap-2">
+            <span>本页目录</span>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              icon="i-lucide-arrow-up"
+              label="返回顶部"
+              class="toc-back-top"
+              @click="scrollToTop"
+            />
+          </p>
           <nav v-if="rendered?.toc?.length">
             <a
               v-for="item in rendered.toc"
@@ -218,6 +223,7 @@ const toggleWatch = async () => {
               :href="`#${item.id}`"
               :style="{ paddingLeft: `${(item.level - 2) * 16}px` }"
               class="block py-0.5 text-(--ui-muted) hover:text-(--ui-primary) no-underline transition-colors"
+              @click.prevent="scrollToHeading(item.id)"
               v-html="item.text"
             />
           </nav>

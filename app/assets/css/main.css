@@ -24,6 +24,28 @@
 .wiki-content h3 { font-size: 1.15rem; font-weight: 600; margin: 1.1em 0 0.3em; }
 .wiki-content h4 { font-size: 1rem; font-weight: 600; margin: 0.9em 0 0.2em; }
 .wiki-content h5, .wiki-content h6 { font-size: 0.95rem; font-weight: 600; margin: 0.8em 0 0.2em; }
+/* 目录跳转目标标题不被顶部导航栏遮挡 */
+.wiki-content :is(h1, h2, h3, h4, h5, h6)[id] { scroll-margin-top: 5rem; }
+/* 移动端：主导航栏 + 粘性第二导航栏（此页目录）同时遮挡，需额外下移 */
+@media (max-width: 1279px) {
+  .wiki-content :is(h1, h2, h3, h4, h5, h6)[id] { scroll-margin-top: calc(var(--ui-header-height) + 3rem); }
+}
+/* 目录跳转后的目标小节高亮：用单一覆盖层盖住整节，消除块间空白缝隙、动画同步连续 */
+.wiki-content.wiki-flash-wrap { position: relative; }
+.toc-flash-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  border-radius: 6px;
+  animation: toc-flash 1s linear;
+}
+@keyframes toc-flash {
+  0%, 100%    { background: transparent; }
+  22%         { background: color-mix(in srgb, var(--ui-primary) 30%, transparent); }
+  50%         { background: transparent; }
+  72%         { background: color-mix(in srgb, var(--ui-primary) 30%, transparent); }
+}
 .wiki-content p { margin: 0.5em 0; }
 .wiki-content pre { background: var(--ui-bg-elevated); border: 1px solid var(--ui-border); border-radius: 6px; padding: 12px 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 .wiki-content code { background: var(--ui-bg-elevated); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
@@ -87,7 +109,9 @@
 .wiki-content ol { list-style: decimal; padding-left: 2em; margin: 0.3em 0; }
 .wiki-content li { margin: 0.15em 0; }
 .wiki-content hr { margin: 1.5em 0; border: none; border-top: 1px solid var(--ui-border); }
-.wiki-content img { max-width: 100%; border-radius: 6px; margin: 0.5em 0; }
+/* 图片默认行内显示（Tailwind preflight 将 img 设为 block 会导致图片独占一行）：
+   行内图片与文字同行，独立成段的图片仍按段落间距排版 */
+.wiki-content img { display: inline-block; vertical-align: middle; max-width: 100%; border-radius: 6px; margin: 0.25em 0; }
 .wiki-content a { color: var(--ui-primary); text-decoration: underline; }
 .wiki-content a:hover { color: var(--ui-primary); opacity: 0.8; }
 .wiki-content del { opacity: 0.6; }
@@ -95,3 +119,36 @@
 /* details/summary：折叠面板 summary 显示为可点击样式 */
 .wiki-content details { margin: 0.5em 0; }
 .wiki-content details > summary { cursor: pointer; }
+
+/* 移动端「此页目录」浮窗：向下滑动 + 渐显过渡 */
+.toc-drop-enter-active, .toc-drop-leave-active { transition: opacity .25s ease, transform .25s ease; }
+.toc-drop-enter-from, .toc-drop-leave-to { opacity: 0; transform: translateY(-10px); }
+
+/* 桌面端目录旁「返回顶部」按钮 hover：文字变主色（绿）且显示点击指针（图标随 currentColor 变色） */
+.toc-back-top { cursor: pointer; }
+.toc-back-top:hover { color: var(--ui-primary) !important; }
+
+/* ================= 全局滚动条样式 ================= */
+* {
+  scrollbar-width: thin;                /* Firefox */
+  scrollbar-color: var(--ui-border-focus) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--ui-border-muted);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ui-border-focus);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

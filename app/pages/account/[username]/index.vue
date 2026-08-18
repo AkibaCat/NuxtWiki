@@ -19,15 +19,17 @@ const activity = computed(() => (data.value?.activity as Record<string, number>)
 const status = computed(() => profile.value?.status || 'active')
 const isBanned = computed(() => status.value === 'banned')
 
-// ==================== 页面标题：站点名 | 用户昵称（数据加载后更新） ====================
+// ==================== 页面标题：站点名 | 用户昵称（写入全局覆盖，数据加载后更新） ====================
 const { site } = useAuthState()
 const siteName = computed(() => site.value?.name || 'NuxtWiki')
+const { setTitle } = useWikiTitle()
 const pageTitle = computed(() => {
   const nick = profile.value?.nickname || profile.value?.username
   if (!nick) return null
   return `${siteName.value} | ${nick}`
 })
-useHead({ title: computed(() => pageTitle.value || null) })
+watch(pageTitle, (v) => setTitle(v), { immediate: true })
+onUnmounted(() => setTitle(null))
 
 // 编辑资料弹窗
 const editOpen = ref(false)

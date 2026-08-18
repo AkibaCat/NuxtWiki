@@ -15,7 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/pages': '所有页面',
   '/recent': '最近更改',
   '/search': '搜索',
-  '/create': '创建页面',
+  '/settings': '设置',
   '/login': '登录',
   '/register': '注册',
   '/admin': '后台管理',
@@ -23,21 +23,38 @@ const PAGE_TITLES: Record<string, string> = {
 
 const siteName = computed(() => site.value?.name || 'NuxtWiki')
 
+const { override } = useWikiTitle()
+
+// 站点级主题设置：挂载时应用持久化的主色（暗亮由 useColorMode 独立处理）
+useThemeSettings()
+
+// ==================== 移动端第二导航栏：此页目录（下拉浮窗）+ 返回顶部 ====================
+const { items: tocItems, visible: tocVisible, open: tocOpen, toggle: tocToggle, close: tocClose, scrollToHeading } = useToc()
+const tocBarRef = ref<HTMLElement | null>(null)
+const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
+const onTocClick = (id: string) => {
+  scrollToHeading(id)
+  tocClose()
+}
+
 const routeTitle = computed(() => {
   const name = siteName.value
   const path = route.path
 
-  // 站点首页：仅站点名称
-  if (path === '/') return name
+  // 页面覆盖标题（Wiki 页面 / 页面编辑器 / 账户页等由组件写入）优先
+  if (override.value) return override.value
+
+  // 站点首页：站点名 + 首页
+  if (path === '/') return `${name} | 首页`
 
   // 固定页面（/admin /login /search …）
   if (PAGE_TITLES[path]) return `${name} | ${PAGE_TITLES[path]}`
 
-  // 其余（Wiki 页面 / 账户页）由对应组件加载数据后自行设置标题，此处仅兜底为站点名
+  // 其余页面兜底为站点名
   return name
 })
 
-// 全局基础标题；Wiki 页面与账户页在各自组件内 useHead 动态覆盖
+// 全局唯一 <title> 来源；动态标题通过 useWikiTitle 覆盖输出
 useHead({ title: computed(() => routeTitle.value) })
 
 // 代码块复制：事件委托（v-html 注入的按钮无法直接绑定）
@@ -64,6 +81,11 @@ const copyText = async (text: string): Promise<boolean> => {
   return ok
 }
 const onDocClick = async (e: Event) => {
+  // 移动端「此页目录」浮窗：点击浮窗外部任意处即关闭
+  const node = e.target as Node | null
+  const bar = tocBarRef.value
+  if (bar && tocOpen.value && !bar.contains(node)) tocClose()
+
   const target = e.target as HTMLElement | null
   const btn = target?.closest?.('.wiki-copy') as HTMLElement | null
   if (!btn) return
@@ -89,12 +111,12 @@ const onDocClick = async (e: Event) => {
 
 const year = new Date().getFullYear()
 
-const navLinks = [
+const navLinks = computed(() => [
   { label: '首页', to: '/', icon: 'i-lucide-home' },
   { label: '所有页面', to: '/pages', icon: 'i-lucide-files' },
-  { label: '创建页面', to: '/create', icon: 'i-lucide-file-plus' },
-  { label: '最近更改', to: '/recent', icon: 'i-lucide-clock' }
-]
+  { label: '最近更改', to: '/recent', icon: 'i-lucide-clock' },
+  ...([1, 2, 3].includes(user.value?.level ?? 0) ? [{ label: '页面编辑器', to: '/editor', icon: 'i-lucide-file-edit' }] : []),
+])
 
 const userMenu = computed(() => {
   const items: any[] = [
@@ -149,7 +171,13 @@ const userMenu = computed(() => {
             variant="ghost"
           />
         </div>
-        <UColorModeButton />
+        <UButton
+          to="/settings"
+          icon="i-lucide-settings"
+          aria-label="设置"
+          color="neutral"
+          variant="ghost"
+        />
         <template v-if="ready">
           <template v-if="user">
             <UDropdownMenu :items="userMenu" :content="{ align: 'end' }">
@@ -186,6 +214,54 @@ const userMenu = computed(() => {
         </div>
       </template>
     </UHeader>
+
+    <!-- 移动端第二导航栏：此页目录（下拉浮窗）+ 返回顶部 -->
+    <div
+      v-if="tocVisible"
+      ref="tocBarRef"
+      class="xl:hidden sticky top-(--ui-header-height) z-40 border-b border-(--ui-border) bg-(--ui-bg)"
+    >
+      <div class="relative flex h-10 items-center justify-between px-2">
+        <UButton
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          label="此页目录"
+          :icon="tocOpen ? 'i-lucide-chevron-down' : 'i-lucide-list'"
+          :icon-last="true"
+          :aria-expanded="tocOpen"
+          @click="tocToggle"
+        />
+        <UButton
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          icon="i-lucide-arrow-up"
+          label="返回顶部"
+          @click="scrollTop"
+        />
+
+        <!-- 向下展开的目录浮窗（覆盖正文上方，非弹窗） -->
+        <Transition name="toc-drop">
+          <div
+            v-if="tocOpen"
+            class="absolute top-full inset-x-2 mt-2 z-40 max-h-[60vh] overflow-y-auto rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated) shadow-lg"
+          >
+          <nav class="px-3 py-2">
+            <a
+              v-for="item in tocItems"
+              :key="item.id"
+              :href="`#${item.id}`"
+              :style="{ paddingLeft: `${(item.level - 2) * 16}px` }"
+              class="block py-1.5 text-sm text-(--ui-muted) hover:text-(--ui-primary) no-underline transition-colors"
+              @click.prevent="onTocClick(item.id)"
+              v-html="item.text"
+            />
+          </nav>
+        </div>
+        </Transition>
+      </div>
+    </div>
 
     <UMain class="flex-1">
       <NuxtPage />

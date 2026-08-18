@@ -65,6 +65,10 @@ Router::add('POST', 'watch.remove', WatchController::class, 'remove');
 // RSS
 Router::add('GET', 'feed.rss', FeedController::class, 'rss');
 
+// 工作区（沉浸式页面编辑器，仅管理员）
+Router::add('GET',  'workspace.get',   WorkspaceController::class, 'get');
+Router::add('POST', 'workspace.save',  WorkspaceController::class, 'save');
+
 // 管理后台
 Router::add('GET',  'admin.stats',         AdminController::class, 'stats');
 Router::add('GET',  'admin.settings',      AdminController::class, 'settingsGet');

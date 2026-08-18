@@ -1,12 +1,12 @@
 # NuxtWiki 部署指南
 
-NuxtWiki 采用 **纯静态 SPA 前端（Nuxt 4）+ PHP API** 架构，可在 **Kangle（easypanel）/ Apache / Nginx** 等支持 PHP 的虚拟主机上运行：
+NuxtWiki 采用 **纯静态 SPA 前端（Nuxt 4）+ PHP API** 架构，可部署在 **Kangle（easypanel）/ Apache / Nginx** 等支持 PHP 的虚拟主机上：
 
 - **前端**：Nuxt `ssr: false` 的静态构建产物，纯 HTML/JS/CSS，服务器**无需 Node 运行时**。
 - **后端**：PHP API（`api/` 目录，PDO 直连数据库），通过 `index.php?r=<controller>.<action>` 路由。
 - **数据库**：生产使用 **MySQL**，本地开发使用 **SQLite**；两套 schema 均已提供，安装向导会自动建表。
 
-> 本文按「先本地打包、后上传部署」的流程编写，兼容 Kangle / Apache / Nginx 三种常见环境。
+> 本文按「先本地打包、后上传部署」的流程编写，兼容 Kangle / Apache / Nginx / 宝塔（Nginx）等常见环境。
 
 ---
 
@@ -19,7 +19,7 @@ NuxtWiki 采用 **纯静态 SPA 前端（Nuxt 4）+ PHP API** 架构，可在 **
 | MySQL  | 5.7+ / 8.0，字符集 `utf8mb4`（排序规则 `utf8mb4_unicode_ci`）         |
 | 可写目录 | `api/data/`、`api/uploads/`（框架运行时写入数据与上传附件）            |
 
-> 本地开发使用 SQLite（需 `pdo_sqlite` / `sqlite3`），生产环境使用 MySQL。
+> 本地开发使用 SQLite（需 `pdo_sqlite`），生产环境使用 MySQL。
 
 ---
 
@@ -34,14 +34,15 @@ NuxtWiki 采用 **纯静态 SPA 前端（Nuxt 4）+ PHP API** 架构，可在 **
 ├── 404.html
 ├── _nuxt/              ← 前端 JS/CSS 资源
 ├── _fonts/             ← 字体资源
-├── account/  admin/  create/  login/  pages/  recent/
-├── register/  search/          ← 静态路由壳（由 nuxt generate 生成）
+├── account/  admin/  pages/  recent/  search/
+├── register/  login/  settings/       ← 静态路由壳（由 nuxt generate 生成）
 ├── .htaccess           ← 伪静态（SPA 兜底）规则
 └── api/                ← PHP 后端
     ├── index.php       ← API 入口
     ├── install.php     ← 安装向导
     ├── bootstrap.php
     ├── schema.mysql.sql / schema.sqlite.sql
+    ├── seed/           ← 初始页面内容（welcome.md / grammar-help.md）
     ├── src/            ← 核心类与控制器
     ├── config.php      ← 安装后自动生成（含数据库连接信息）
     ├── data/           ← 运行期数据（SQLite / 备份），需可写
@@ -56,7 +57,7 @@ NuxtWiki 采用 **纯静态 SPA 前端（Nuxt 4）+ PHP API** 架构，可在 **
 
 ### 3.1 方式一：一键脚本（推荐）
 
-仓库提供了 `build-deploy.sh`，自动完成「安装依赖 → 构建前端 → 组装后端 → 打包」：
+仓库提供 `build-deploy.sh`，自动完成「安装依赖 → 构建前端 → 组装后端 → 打包」：
 
 ```bash
 ./build-deploy.sh
@@ -64,7 +65,7 @@ NuxtWiki 采用 **纯静态 SPA 前端（Nuxt 4）+ PHP API** 架构，可在 **
 
 - 产物：`deploy/nuxtwiki-<版本>.tar.gz`（默认版本为时间戳，可用 `VERSION=1.2.0` 指定）。
 - 压缩包**不嵌套外层目录**，解压即为站点根目录内容。
-- 脚本会在源头排除运行期/开发期文件：`api/data`、`api/uploads`、`api/config.php`、`api/_smoke.php`、`api/_seed_test.php`（这些会在安装时自动创建）。
+- 脚本会在源头排除运行期文件：`api/data`、`api/uploads`、`api/config.php`（这些会在安装时自动生成）。
 
 ### 3.2 方式二：手动构建
 
@@ -73,7 +74,7 @@ pnpm install
 pnpm generate
 ```
 
-构建产物位于 `.output/public/`。将其中**所有内容**（含 `index.html`、`200.html`、`404.html`、`.htaccess`、`_nuxt/`、各路由壳）复制到站点根目录，再将整个 `api/` 目录复制到 `站点根目录/api/`。
+构建产物位于 `.output/public/`。将其中**所有内容**（含 `index.html`、`200.html`、`404.html`、`.htaccess`、`_nuxt/`、各路由壳）复制到站点根目录，再将整个 `api/` 目录复制到 `站点根目录/api/`（务必保留 `api/seed/`）。
 
 > ⚠️ 必须使用 **`nuxt generate`**（SPA 模式）。它会生成 `index.html`、`200.html`、`404.html` 及各静态路由壳；`nuxt build`（node-server 预设）不会生成 `index.html`，无法用于纯静态部署。
 
@@ -81,16 +82,33 @@ pnpm generate
 
 每次 `git push` 后，`.github/workflows/ci.yml` 会自动构建并上传部署包：
 
-仓库 → **Actions** → 选择最新一次运行 → 底部 **Artifacts** → 下载 `nuxtwiki-deploy` 即可。
+- 仓库 → **Actions** → 选择最新一次运行 → 底部 **Artifacts** → 下载 `nuxtwiki-deploy` 即可。
+- 正式版本也可在仓库的 **Releases** 页面获取：Releases 页 → 对应版本标签 → **Assets**（源码压缩包与随附的部署包）。
+
+> 说明：Releases 附件由**仓库所有者**（发布者）在 GitHub Releases 页面手动创建并上传，非自动化生成；部署包也可直接用上文 CI Artifacts 的产物。
+
+### 3.4 通过 gh-pages 分支拉取
+
+CI 构建完成后还会把产物**直接推送到 `gh-pages` 分支**（由 `peaceiris/actions-gh-pages` 完成），因此可直接拉取该分支的内容部署，无需在本地构建：
+
+```bash
+git fetch origin gh-pages
+git checkout -b gh-pages origin/gh-pages   # 首次：基于远程分支创建本地分支
+# 或已有本地分支时：git checkout gh-pages && git pull origin gh-pages
+```
+
+- 该分支的根目录即站点根目录内容（`index.html`、`api/`、`_nuxt/` 等），拉取后上传到服务器站点根目录即可。
+- 由于 `gh-pages` 分支使用 `force_orphan: true` 每次完全重建，**不要**在它上面直接修改再推送，否则会被下一次 CI 覆盖；对站点内容的长期修改应回到 `main` 分支维护。
+- 该分支通常用于「服务器通过 git 拉取部署」的自动化场景；若只是下载部署包，用上文 3.3 的 Artifacts 更方便。
 
 ---
 
 ## 4. 上传与部署
 
-1. 将 `nuxtwiki-<版本>.tar.gz` 上传到服务器（FTP / SFTP / 面板文件管理器 / `scp`）。
+1. 获取部署包 `nuxtwiki-<版本>.tar.gz`（可从仓库 **Releases** 页面的 Assets 下载，或用 3.3 的 CI Artifacts / 本地 `./build-deploy.sh` 生成），然后上传到服务器（FTP / SFTP / 面板文件管理器 / `scp`）。
 2. 在服务器站点根目录解压（`tar -xzf nuxtwiki-<版本>.tar.gz`），确保 `index.html`、`api/`、`.htaccess` 直接落在根目录下。
 3. 无需手动导入 schema，安装向导会自动执行建表。
-4. 确保 `api/`、`api/data/`、`api/uploads/` 对 PHP 进程**可写**（见第 5.4 节）。
+4. 确保 `api/`、`api/data/`、`api/uploads/` 对 PHP 进程**可写**（见第 5.5 节）。
 5. 浏览器访问 `http://你的域名/api/install.php` 完成安装（见第 5 节）。
 
 ---
@@ -107,7 +125,7 @@ pnpm generate
 
 在站点根目录创建 `.htaccess`（Kangle 支持 Apache 风格重写）：
 
-> 此文件已在`public`目录与部署包里包含，无需手动创建。
+> 此文件已在 `public` 目录与部署包里包含，无需手动创建。
 
 ```apache
 <IfModule mod_rewrite.c>
@@ -129,8 +147,8 @@ RewriteRule ^(.*)$ /index.html [L]
 要点：
 - `/api/index.php`、`/api/install.php`、`/api/uploads/...` 都是真实文件，`RewriteCond %{REQUEST_FILENAME} !-f` 已保证它们不会被重写；
 - `!^/api` 条件用于拦截「不存在的 /api 路径」，避免被错误兜底到 SPA；
-- 若面板要求把重写规则配置在控制面板（虚拟主机 → 重写规则），将以上 `RewriteCond` / `RewriteRule` 按面板格式填入即可。
-- **Nginx** 用户请将上述规则等价转换为 `try_files $uri $uri/ /index.html;`（并确保 `/api` 下的请求交给 PHP/不落入 SPA）。
+- 若面板要求把重写规则配置在控制面板，将以上 `RewriteCond` / `RewriteRule` 按面板格式填入即可。
+- **Nginx** 用户请将上述规则等价转换为 `try_files $uri $uri/ /index.html;`（并确保 `/api` 下的请求交给 PHP、不落入 SPA）。
 
 ### 5.3 创建 MySQL 数据库
 
@@ -152,7 +170,9 @@ FLUSH PRIVILEGES;
 3. 填写站点名称、首页页面名与管理员账号密码；
 4. 点击「开始安装」。
 
-安装完成后自动生成 `api/config.php`（写入 MySQL 连接信息并建表），创建管理员账号，并写入两个初始页面（首页、语法帮助）。最后返回网站首页。
+安装完成后自动生成 `api/config.php`（写入 MySQL 连接信息并建表），创建管理员账号，并从 `api/seed/` 导入两个初始页面（首页、语法帮助）。最后返回网站首页。
+
+> 初始页面内容取自 `api/seed/welcome.md` 与 `api/seed/grammar-help.md`（站名通过 `{{SITE_NAME}}` 占位符注入），如需自定义默认内容，修改对应 `.md` 后重新安装即可。
 
 ### 5.5 设置目录权限
 
@@ -176,7 +196,7 @@ Windows 可在资源管理器中右键目录 → 属性 → 安全，授予运�
 
 ## 6. 宝塔面板（Nginx）专属部署
 
-本小节针对 **宝塔面板 + Nginx + PHP-FPM + MySQL** 的常见环境。若仍使用 Kangle 或 Apache，请按上文第 5 节操作。
+本小节针对 **宝塔面板 + Nginx + PHP-FPM + MySQL** 的常见环境。若使用 Kangle 或 Apache，请按上文第 5 节操作。
 
 ### 6.1 安装运行环境
 
@@ -185,17 +205,16 @@ Windows 可在资源管理器中右键目录 → 属性 → 安全，授予运�
 | 软件  | 版本要求 | 备注                         |
 |-------|----------|------------------------------|
 | Nginx | 任意较新版本 | 宝塔默认 Web 服务器          |
-| PHP   | ≥ 8.1     | 面对 8.1 / 8.2 / 8.3 均可 |
+| PHP   | ≥ 8.1     | 8.1 / 8.2 / 8.3 均可           |
 | MySQL | 5.7+ / 8.0 | 字符集 `utf8mb4`            |
 
 到「网站 → PHP 设置 → 安装扩展」勾选 **`pdo_mysql`、`mbstring`、`fileinfo`**（可选 `openssl`、`curl`、`gd`、`zip`）。
 
 ### 6.2 添加站点并上传部署包
 
-1. 本地生成部署包：`./build-deploy.sh`（或通过 Releases 与 CI Actions 下载）。
+1. 本地生成部署包：`./build-deploy.sh`（或通过 Releases / CI Actions 下载）。
 2. 宝塔「网站 → 添加站点」，绑定域名，创建站点。
-3. 将 `nuxtwiki-<版本>.tar.gz` 上传到服务器，并在站点根目录
-   `www/wwwroot/<站点名>/` 下解压，确保 `index.html`、`api/`、`_nuxt/` 直接落在根目录。
+3. 将 `nuxtwiki-<版本>.tar.gz` 上传到服务器，并在站点根目录 `www/wwwroot/<站点名>/` 下解压，确保 `index.html`、`api/`、`_nuxt/` 直接落在根目录。
 4. 在宝塔「网站 → 设置 → 网站目录」将**运行目录**设为站点**根目录**（`/`）。前端以根路径绝对地址访问资源，必须承载在根路径；若需子目录部署，见上文第 2 节备注。
 
 ### 6.3 创建数据库并运行安装向导
@@ -264,3 +283,5 @@ chmod -R u+w api/data api/uploads
 2. 覆盖上传新包内容到站点根目录（**不要删除** `api/config.php`、`api/data/`、`api/uploads/`，以保留配置与数据）。
 3. 框架会在访问时自动执行幂等的迁移（新增表/列），通常无需手动操作。
 4. 验证页面与历史数据是否正常。
+
+> 升级不会覆盖已存在的数据库内容；若希望更新初始页面（首页 / 语法帮助）的默认正文，请直接在站点内编辑对应页面。
