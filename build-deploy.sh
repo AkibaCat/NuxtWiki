@@ -6,6 +6,7 @@
 #   ./build-deploy.sh                 # 构建并打包，输出到 ./deploy/nuxtwiki-<VERSION>.tar.gz
 #   VERSION=1.2.0 ./build-deploy.sh   # 指定版本号
 #   OUT=dist ./build-deploy.sh        # 指定打包输出目录
+#   TARGET=deploy/publish NAME=build-x ./build-deploy.sh  # 覆盖产物目录与压缩包名（CI 用）
 #
 # 依赖：Node.js + pnpm、可选的 tar（Git Bash / WSL / Linux / macOS 均可）。
 #
@@ -20,8 +21,9 @@ set -euo pipefail
 VERSION="v1.1.0"
 TIME="${TIME:-$(date +%Y%m%d%H%M)}"
 OUT_DIR="${OUT:-deploy}"
-NAME="NuxtWiki-${VERSION}-build-${TIME}"
-TARGET="${OUT_DIR}/${NAME}"
+# 以下三个变量均支持环境变量覆盖（如 CI：export NAME=build-<sha> TARGET=deploy/publish）
+NAME="${NAME:-NuxtWiki-${VERSION}-build-${TIME}}"
+TARGET="${TARGET:-${OUT_DIR}/${NAME}}"
 TARBALL="${OUT_DIR}/${NAME}.tar.gz"
 
 # ---------- 前置检查 ----------

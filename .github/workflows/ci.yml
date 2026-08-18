@@ -36,9 +36,14 @@ jobs:
 
       - name: 构建并打包（产物目录固定为 deploy/publish）
         run: |
-          export TARGET=deploy/publish   # 覆盖构建脚本的目标目录
+          export TARGET=deploy/publish   # 覆盖构建脚本的目标目录（脚本需支持 TARGET/NAME 环境变量覆盖）
           export NAME=build-${{ github.sha }}   # 让压缩包名带 SHA
           bash ./build-deploy.sh
+
+      - name: 校验产物目录
+        run: |
+          test -f deploy/publish/index.html   # 防止空目录被静默推送到 gh-pages（只推送 .nojekyll）
+          test -d deploy/publish/api
 
       - name: 上传压缩包（作为 artifact 留存）
         uses: actions/upload-artifact@v4
