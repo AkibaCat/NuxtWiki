@@ -54,6 +54,7 @@ Router::add('POST', 'page.save',       PageController::class, 'save');
 Router::add('POST', 'page.update-acl', PageController::class, 'updateAcl');
 Router::add('POST', 'page.delete',     PageController::class, 'delete');
 Router::add('POST', 'page.revert',     PageController::class, 'revert');
+Router::add('POST', 'page.delete-revision', PageController::class, 'deleteRevision');
 
 // 订阅
 Router::add('GET',  'watch.status', WatchController::class, 'status');
@@ -71,5 +72,6 @@ Router::add('POST', 'admin.settings',      AdminController::class, 'settingsSave
 Router::add('GET',  'admin.backup',        AdminController::class, 'backup');
 Router::add('POST', 'admin.restore',       AdminController::class, 'restore');
 Router::add('GET',  'admin.pages',         AdminController::class, 'pages');
+Router::add('GET',  'admin.version-check', AdminController::class, 'versionCheck');
 
 Router::dispatch();

@@ -6,6 +6,10 @@
 
 declare(strict_types=1);
 
+// ---------- 版本 ----------
+/** NuxtWiki 当前版本号（发布时更新，与 Release Notes 文件夹保持一致） */
+const NUVTWIKI_VERSION = '1.1.1';
+
 // ---------- 基础环境 ----------
 error_reporting(E_ALL);
 ini_set('display_errors', '0');

@@ -174,7 +174,70 @@ Windows 可在资源管理器中右键目录 → 属性 → 安全，授予运�
 
 ---
 
-## 6. 常见问题
+## 6. 宝塔面板（Nginx）专属部署
+
+本小节针对 **宝塔面板 + Nginx + PHP-FPM + MySQL** 的常见环境。若仍使用 Kangle 或 Apache，请按上文第 5 节操作。
+
+### 6.1 安装运行环境
+
+在宝塔「软件商店」安装：
+
+| 软件  | 版本要求 | 备注                         |
+|-------|----------|------------------------------|
+| Nginx | 任意较新版本 | 宝塔默认 Web 服务器          |
+| PHP   | ≥ 8.1     | 面对 8.1 / 8.2 / 8.3 均可 |
+| MySQL | 5.7+ / 8.0 | 字符集 `utf8mb4`            |
+
+到「网站 → PHP 设置 → 安装扩展」勾选 **`pdo_mysql`、`mbstring`、`fileinfo`**（可选 `openssl`、`curl`、`gd`、`zip`）。
+
+### 6.2 添加站点并上传部署包
+
+1. 本地生成部署包：`./build-deploy.sh`（或通过 Releases 与 CI Actions 下载）。
+2. 宝塔「网站 → 添加站点」，绑定域名，创建站点。
+3. 将 `nuxtwiki-<版本>.tar.gz` 上传到服务器，并在站点根目录
+   `www/wwwroot/<站点名>/` 下解压，确保 `index.html`、`api/`、`_nuxt/` 直接落在根目录。
+4. 在宝塔「网站 → 设置 → 网站目录」将**运行目录**设为站点**根目录**（`/`）。前端以根路径绝对地址访问资源，必须承载在根路径；若需子目录部署，见上文第 2 节备注。
+
+### 6.3 创建数据库并运行安装向导
+
+1. 宝塔「数据库」新建数据库，字符集选 `utf8mb4` → 排序规则 `utf8mb4_unicode_ci`。
+2. 访问 `http://你的域名/api/install.php`，数据库类型选择 **MySQL**，填写主机 / 端口 / 库名 / 账号 / 密码，完成安装。
+
+### 6.4 配置 Nginx 伪静态（SPA 兜底）
+
+`.htaccess` 仅对 Apache 生效，Nginx 需在宝塔「网站 → 设置 → 伪静态」中配置。核心是：**真实文件与 `/api` 下的 PHP 请求不入 SPA 兜底**：
+
+```nginx
+location / {
+    # 存在的真实文件/目录（_nuxt、_fonts、api/uploads 等）直接服务
+    if (-e $request_filename) { break; }
+    # 其余前端路由（/页面名、/页面名/edit、/admin 等）兜底到 SPA 入口
+    rewrite ^(.*)$ /index.html last;
+}
+
+# 关键：/api 下的 PHP 请求交给 PHP-FPM，避免被上述 rewrite 兜底到 SPA
+location ~ ^/api/.+\.php$ {
+    include enable-php.conf;
+}
+```
+
+> 要点：宝塔通过 `include enable-php.conf;` 启用 PHP-FPM 解析，务必保留；该规则与第 5.2 节 Apache `.htaccess` 的 `RewriteCond !^/api` 逻辑等价。
+
+### 6.5 目录权限
+
+确保 `api/data/`、`api/uploads/` 对 PHP-FPM 运行用户（通常为 `www`）可写：
+
+- 宝塔「文件」中选中这两个目录 → 右键「权限」，属主设为 `www`，并勾选写权限；
+- 或终端执行：
+
+```bash
+chown -R www:www api/data api/uploads
+chmod -R u+w api/data api/uploads
+```
+
+---
+
+## 7. 常见问题
 
 | 现象 | 排查 |
 |------|------|
@@ -188,14 +251,14 @@ Windows 可在资源管理器中右键目录 → 属性 → 安全，授予运�
 
 ---
 
-## 7. 生产环境建议
+## 8. 生产环境建议
 
 - **全程启用 HTTPS**，并确认 `api/config.php` 中 `security` 段 session 配置与站点协议一致。
 - 修改 `api/config.php` 中 `mail.from` 与 SMTP 配置，启用邮件通知。
 - 定期在管理后台「备份」页导出数据备份，迁移时可用「导入」功能恢复。
 - **不要提交 `api/config.php` 到公开仓库**（`.gitignore` 已忽略），其中包含数据库凭据。
 
-## 8. 更新升级
+## 9. 更新升级
 
 1. 重新构建并生成最新部署包（`./build-deploy.sh` 或通过 CI Artifacts 下载）。
 2. 覆盖上传新包内容到站点根目录（**不要删除** `api/config.php`、`api/data/`、`api/uploads/`，以保留配置与数据）。

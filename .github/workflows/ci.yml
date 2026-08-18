@@ -1,15 +1,18 @@
 name: ci
 
-on: push
+on:
+  push:
+    branches: [ main ]   # 按需调整触发分支
 
 jobs:
-  # 代码检查：Lint + Typecheck + PHP 语法检查
-  ci:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 检出代码
+      - name: 检出代码（需要完整历史用于 gh-pages 操作）
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: 安装 pnpm
         uses: pnpm/action-setup@v6
@@ -23,38 +26,30 @@ jobs:
       - name: 安装依赖
         run: pnpm install
 
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Typecheck
-        run: pnpm run typecheck
+      - name: 代码检查（Lint + Typecheck）
+        run: |
+          pnpm run lint
+          pnpm run typecheck
 
       - name: PHP 语法检查
         run: find api -name '*.php' -print0 | xargs -0 -n1 php -l
 
-  # 构建部署包：复用 build-deploy.sh（静态前端 + PHP 后端 → tar.gz，压缩包内直接是产物）
-  build-package:
-    needs: ci
-    runs-on: ubuntu-latest
+      - name: 构建并打包（产物目录固定为 deploy/publish）
+        run: |
+          export TARGET=deploy/publish   # 覆盖构建脚本的目标目录
+          export NAME=build-${{ github.sha }}   # 让压缩包名带 SHA
+          bash ./build-deploy.sh
 
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v7
-
-      - name: 安装 pnpm
-        uses: pnpm/action-setup@v6
-
-      - name: 安装 Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: 运行构建打包脚本
-        run: bash ./build-deploy.sh
-
-      - name: 上传部署包
+      - name: 上传压缩包（作为 artifact 留存）
         uses: actions/upload-artifact@v4
         with:
           name: nuxtwiki-deploy
           path: deploy/*.tar.gz
+
+      - name: 部署到 gh-pages 分支
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy/publish   # 直接使用构建好的目录
+          # publish_branch: gh-pages       # 默认就是 gh-pages
+          # force_orphan: true             # 如需每次完全覆盖历史

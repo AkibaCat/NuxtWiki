@@ -153,7 +153,6 @@ if ($method === 'POST') {
 ## 欢迎使用 $siteName
 
 [![Nuxt v4](https://img.shields.io/badge/Made%20with-Nuxt%20v4-00DC82?logo=nuxt&labelColor=020420)](https://nuxt.com)
-[![Nuxt UI](https://img.shields.io/badge/Made%20with-Nuxt%20UI-00DC82?logo=nuxt&labelColor=020420)](https://ui.nuxt.com)
 
 欢迎来到 **$siteName** —— 一个轻量、快速、开箱即用的个人知识库 / 团队 Wiki。
 

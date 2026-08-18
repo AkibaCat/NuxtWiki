@@ -19,6 +19,16 @@ const activity = computed(() => (data.value?.activity as Record<string, number>)
 const status = computed(() => profile.value?.status || 'active')
 const isBanned = computed(() => status.value === 'banned')
 
+// ==================== 页面标题：站点名 | 用户昵称（数据加载后更新） ====================
+const { site } = useAuthState()
+const siteName = computed(() => site.value?.name || 'NuxtWiki')
+const pageTitle = computed(() => {
+  const nick = profile.value?.nickname || profile.value?.username
+  if (!nick) return null
+  return `${siteName.value} | ${nick}`
+})
+useHead({ title: computed(() => pageTitle.value || null) })
+
 // 编辑资料弹窗
 const editOpen = ref(false)
 const onProfileSaved = async () => {
@@ -81,29 +91,13 @@ const unwatch = async (tag: string) => {
 const fmt = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-// 用插值分位数划分 4 档活跃度（避免少量活跃被误判为高活跃）
-const activityLevels = computed<[number, number, number, number]>(() => {
-  const counts = Object.values(activity.value).filter((c) => c > 0).sort((a, b) => a - b)
-  if (!counts.length) return [0, 0, 0, 0]
-  // 线性插值分位数（与常见统计软件一致），max 取实际最大值
-  const q = (p: number) => {
-    const pos = p * (counts.length - 1)
-    const lo = Math.floor(pos)
-    const hi = Math.ceil(pos)
-    if (lo === hi) return counts[lo]!
-    return counts[lo]! + (counts[hi]! - counts[lo]!) * (pos - lo)
-  }
-  return [q(0.25), q(0.5), q(0.75), counts[counts.length - 1]!]
-})
-
-// 只有当数值真正高于上一档阈值时才提升等级，避免低活跃整体显示为高活跃色
+// 活跃度等级（固定阈值）：0 -> 0，1~2 -> 1，3~4 -> 2，5~6 -> 3，7+ -> 4
 const levelFor = (count: number): number => {
   if (count <= 0) return 0
-  const [q1, q2, q3, max] = activityLevels.value
-  if (count >= max && max > q3) return 4
-  if (count >= q3 && q3 > q2) return 3
-  if (count >= q2 && q2 > q1) return 2
-  return 1
+  if (count <= 2) return 1
+  if (count <= 4) return 2
+  if (count <= 6) return 3
+  return 4
 }
 
 const weeks = computed(() => {

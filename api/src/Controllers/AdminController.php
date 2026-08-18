@@ -19,7 +19,7 @@ final class AdminController
             'regcodes'    => $count('regcodes'),
             'total_hits'  => $sumHits,
             'driver'      => Database::driver(),
-            'version'     => '1.0.0',
+            'version'     => NUVTWIKI_VERSION,
         ]);
     }
 
@@ -75,7 +75,7 @@ final class AdminController
         $dump = [
             'exported_at' => Database::now(),
             'app'         => 'NuxtWiki',
-            'version'     => '1.0.0',
+            'version'     => NUVTWIKI_VERSION,
         ];
         foreach (['users', 'pages', 'revisions', 'watchers', 'regcodes', 'settings'] as $table) {
             $dump[$table] = $db->query('SELECT * FROM ' . Database::qi($table))->fetchAll();
@@ -211,5 +211,114 @@ final class AdminController
                 . '/比' . (string)$r['acl_diff'] . '/回' . (string)$r['acl_backlinks'] . '/权' . (string)$r['acl_acl']
                 . '/贡' . (string)$r['acl_contributors'],
         ], $rows));
+    }
+
+    /** GET admin.version-check —— 版本更新检查（读取仓库 package.json 与 Release Notes） */
+    public static function versionCheck(): never
+    {
+        Auth::requireAdmin();
+        $force = ($_GET['refresh'] ?? '') === '1';
+        $info = self::fetchVersionInfo($force);
+        Response::data([
+            'current_version' => NUVTWIKI_VERSION,
+            'latest_version'  => $info['latest_version'],
+            'has_update'      => $info['latest_version'] !== '' && version_compare($info['latest_version'], NUVTWIKI_VERSION, '>'),
+            'release_notes'   => $info['release_notes'],
+            'release_url'     => $info['release_url'],
+            'checked_at'      => $info['checked_at'],
+        ]);
+    }
+
+    /**
+     * 拉取仓库最新版本信息（package.json → 版本号，Release Notes 文件夹 → 更新说明）。
+     * 结果写入 data 目录缓存（默认 6 小时），避免频繁请求 GitHub。
+     *
+     * @return array{latest_version:string, release_notes:string, release_url:string, checked_at:string}
+     */
+    private static function fetchVersionInfo(bool $force = false): array
+    {
+        $repo   = 'AkibaCat/NuxtWiki';
+        $branch = 'main';
+        $rawUrl = "https://raw.githubusercontent.com/{$repo}/{$branch}";
+        $dataDir = rtrim((string)(app_config()['uploads']['data_dir'] ?? (__DIR__ . '/../../data')), '/\\');
+        $cacheFile = $dataDir . DIRECTORY_SEPARATOR . 'version_cache.json';
+        $ttl = 6 * 3600;
+
+        $cached = [];
+        if (is_file($cacheFile)) {
+            $decoded = json_decode((string)file_get_contents($cacheFile), true);
+            if (is_array($decoded)) {
+                $cached = $decoded;
+            }
+        }
+        // 缓存命中（未过期）且非强制刷新时直接返回
+        if (!$force && isset($cached['fetched_at']) && (time() - (int)$cached['fetched_at']) < $ttl) {
+            return $cached;
+        }
+
+        $info = [
+            'latest_version' => (string)($cached['latest_version'] ?? ''),
+            'release_notes'  => (string)($cached['release_notes'] ?? ''),
+            'release_url'    => "https://github.com/{$repo}/releases",
+            'checked_at'     => Database::now(),
+        ];
+
+        // 1. 读取仓库 package.json 判断最新版本
+        $pkgRaw = self::httpGet($rawUrl . '/package.json');
+        $pkg = $pkgRaw !== '' ? json_decode($pkgRaw, true) : null;
+        if (!is_array($pkg)) {
+            // 拉取失败：有缓存则沿用（可能已过期，仍优于空结果）
+            return $cached ?: $info;
+        }
+        $latest = '';
+        $vid    = '';
+        if (is_array($pkg['versions'] ?? null)) {
+            $latest = (string)($pkg['versions']['version'] ?? '');
+            $vid    = (string)($pkg['versions']['id'] ?? '');
+        } elseif (isset($pkg['version'])) {
+            $latest = (string)$pkg['version'];
+        }
+        $info['latest_version'] = $latest;
+
+        // 2. 存在新版本时，读取 Release Notes 文件夹中对应版本说明（文件名形如 [3]1-1-1.md）
+        if ($latest !== '' && $vid !== '' && version_compare($latest, NUVTWIKI_VERSION, '>')) {
+            $dashed = str_replace('.', '-', $latest);
+            $notes  = self::httpGet($rawUrl . '/' . rawurlencode('Release Notes') . '/' . rawurlencode("[{$vid}]{$dashed}.md"));
+            if ($notes !== '') {
+                $info['release_notes'] = $notes;
+            }
+        }
+        $info['checked_at'] = Database::now();
+
+        // 写入缓存（data 目录不可写时忽略）
+        $info['fetched_at'] = time();
+        if (is_dir($dataDir) && is_writable($dataDir)) {
+            @file_put_contents($cacheFile, json_encode($info, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+        unset($info['fetched_at']);
+        return $info;
+    }
+
+    /** 简单 HTTP GET（file_get_contents 优先，失败时回退 cURL），失败返回空串 */
+    private static function httpGet(string $url): string
+    {
+        $ctx = stream_context_create(['http' => ['timeout' => 8, 'user_agent' => 'NuxtWiki-Updater/1.0']]);
+        $raw = @file_get_contents($url, false, $ctx);
+        if ($raw !== false) {
+            return (string)$raw;
+        }
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_USERAGENT      => 'NuxtWiki-Updater/1.0',
+            ]);
+            $raw = curl_exec($ch);
+            curl_close($ch);
+            return is_string($raw) ? $raw : '';
+        }
+        return '';
     }
 }

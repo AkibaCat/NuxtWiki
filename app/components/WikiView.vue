@@ -3,11 +3,27 @@ const props = defineProps<{ tag: string }>()
 
 const api = useApi()
 const { user, ready, init } = useAuth()
+const { site } = useAuthState()
 const toast = useToast()
 
 const page = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
+
+// ==================== 页面标题（随页面数据动态更新） ====================
+const siteName = computed(() => site.value?.name || 'NuxtWiki')
+// 站点首页特殊页：命中 home_tag / Home / HomePage 即视为站点首页，固定显示「首页」
+const isHome = computed(() => !!page.value?.page && (props.tag === site.value?.home_tag || props.tag === 'Home' || props.tag === 'HomePage'))
+
+const pageTitle = computed(() => {
+  const title = page.value?.page?.title
+  if (!title) return null
+  // Home 为特殊页：固定显示「首页」
+  if (isHome.value) return `${siteName.value} | 首页`
+  return `${siteName.value} | ${title}`
+})
+
+useHead({ title: computed(() => pageTitle.value || null) })
 
 // 订阅
 const watching = ref(false)

@@ -377,6 +377,42 @@ final class PageController
         Response::data(['revision' => $newRevision]);
     }
 
+    /** POST page.delete-revision —— 仅管理员，删除指定修订（当前最新修订不可删） */
+    public static function deleteRevision(): never
+    {
+        $admin = Auth::requireAdmin();
+        Auth::verifyCsrf();
+        $b = Response::body();
+        $tag = Text::normalizeTag((string)($b['tag'] ?? ''));
+        $rev = (int)($b['revision'] ?? 0);
+        $page = self::find($tag);
+        if ($page === null) {
+            Response::error('页面不存在。', 404, 'NOT_FOUND');
+        }
+        if ($rev <= 0) {
+            Response::error('无效的修订号。', 422, 'INVALID_INPUT');
+        }
+        if ($rev === (int)$page['revision']) {
+            Response::error('不能删除当前最新修订。', 422, 'INVALID_INPUT');
+        }
+        $revs = self::revisionBodies((int)$page['id']);
+        if (!isset($revs[$rev])) {
+            Response::error('目标修订不存在。', 404, 'NOT_FOUND');
+        }
+        if (count($revs) <= 1) {
+            Response::error('至少需保留一条修订。', 422, 'INVALID_INPUT');
+        }
+        $st = Database::pdo()->prepare(
+            'DELETE FROM ' . Database::qi('revisions')
+            . ' WHERE ' . Database::qi('page_id') . ' = ? AND ' . Database::qi('revision') . ' = ?'
+        );
+        $st->execute([(int)$page['id'], $rev]);
+        if ($st->rowCount() === 0) {
+            Response::error('目标修订不存在。', 404, 'NOT_FOUND');
+        }
+        Response::data(['ok' => true]);
+    }
+
     /** GET page.backlinks?tag= */
     public static function backlinks(): never
     {

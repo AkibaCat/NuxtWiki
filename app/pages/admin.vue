@@ -19,6 +19,8 @@ onMounted(async () => {
   }
   await loadStats()
   loading.value = false
+  // 版本更新自动检查（每天首次登录后台触发一次）
+  await autoCheckVersion()
 })
 
 // ============ 概览 ============
@@ -26,6 +28,67 @@ const stats = ref<any>(null)
 const loadStats = async () => {
   const r = await api.get('admin.stats')
   if (r.ok) stats.value = r.data
+}
+
+// ============ 版本更新检查 ============
+// 当前版本优先取版本检查结果（后端维护），未检查前兜底用 stats.version
+const currentVersion = computed(() => versionInfo.value?.current_version || stats.value?.version || '')
+const versionInfo = ref<any>(null)
+const versionChecking = ref(false)
+const versionModalOpen = ref(false)
+
+// 简单转义（Release Notes 为仓库 Markdown，经 v-html 渲染前转义避免注入）
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+const releaseNotesHtml = computed(() => {
+  const md = versionInfo.value?.release_notes || ''
+  if (!md) return '<p>暂无更新说明</p>'
+  return md
+    .split('\n')
+    .map((line: string) => {
+      if (/^### /.test(line)) return `<p class="mt-3 mb-1 font-semibold">${escapeHtml(line.slice(4))}</p>`
+      if (/^## /.test(line)) return `<p class="mt-3 mb-1 text-base font-bold">${escapeHtml(line.slice(3))}</p>`
+      if (/^[-•*] /.test(line)) return `<p class="flex gap-2 pl-1"><span>•</span><span>${escapeHtml(line.replace(/^[-•*] /, ''))}</span></p>`
+      if (line.trim() === '') return ''
+      return `<p>${escapeHtml(line)}</p>`
+    })
+    .join('')
+})
+
+// 版本检查：silent=true 为自动检查（静默失败），否则为手动点击（失败/无更新均有提示）
+const checkVersion = async (opts: { silent?: boolean; refresh?: boolean } = {}) => {
+  versionChecking.value = true
+  const r = await api.get('admin.version-check', { refresh: opts.refresh ? 1 : undefined })
+  versionChecking.value = false
+  if (!r.ok) {
+    if (!opts.silent) toast.add({ title: r.error?.message || '检查更新失败，请稍后重试', color: 'error' })
+    return
+  }
+  versionInfo.value = r.data
+  if (r.data?.has_update) {
+    // 检测到新版本：弹出可点击查看的消息提示
+    toast.add({
+      title: '检测到新版本，点击查看',
+      color: 'primary',
+      actions: [{ label: '查看', onClick: () => { versionModalOpen.value = true } }]
+    })
+  } else if (!opts.silent) {
+    toast.add({ title: '已是最新版本', color: 'success' })
+  }
+}
+
+// 自动检查：每天首次登录后台时触发一次（按浏览器记录）
+const autoCheckVersion = async () => {
+  const KEY = 'nuxtwiki_version_check_date'
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    if (localStorage.getItem(KEY) === today) return
+    localStorage.setItem(KEY, today)
+    await checkVersion({ silent: true })
+  } catch {
+    // 浏览器存储不可用时静默跳过
+  }
 }
 
 // ============ 设置 ============
@@ -332,6 +395,15 @@ const statCards = computed(() => {
   <div class="max-w-5xl mx-auto px-4 py-8">
     <h1 class="text-2xl font-bold mb-6">管理后台</h1>
 
+    <!-- 版本更新横幅：检测到新版本时显示 -->
+    <div v-if="versionInfo?.has_update" class="mb-6 flex items-center justify-between gap-3 rounded-lg border border-(--ui-primary) bg-(--ui-primary)/10 px-4 py-3">
+      <div class="flex items-center gap-2 text-sm">
+        <UIcon name="i-lucide-sparkles" class="size-4 shrink-0 text-(--ui-primary)" />
+        <span>检测到新版本：<span class="font-medium text-white">{{ versionInfo.current_version }}</span><span class="text-(--ui-muted)"> → </span><span class="font-semibold text-green-500">{{ versionInfo.latest_version }}</span></span>
+      </div>
+      <UButton size="sm" color="primary" icon="i-lucide-eye" @click="versionModalOpen = true">查看新版本</UButton>
+    </div>
+
     <div v-if="loading" class="flex justify-center py-16">
       <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-(--ui-primary)" />
     </div>
@@ -366,9 +438,19 @@ const statCards = computed(() => {
               </div>
             </UCard>
           </div>
-          <div v-if="stats" class="mt-6 flex flex-wrap gap-4 text-sm text-(--ui-muted)">
+          <div v-if="stats" class="mt-6 flex flex-wrap items-center gap-4 text-sm text-(--ui-muted)">
             <span>数据库：{{ stats.driver }}</span>
-            <span>版本：{{ stats.version }}</span>
+            <span class="flex items-center gap-2">
+              <span>版本：{{ currentVersion }}</span>
+              <UButton
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                icon="i-lucide-refresh-cw"
+                :loading="versionChecking"
+                @click="checkVersion({ refresh: true })"
+              >检查更新</UButton>
+            </span>
           </div>
         </template>
 
@@ -718,5 +800,35 @@ const statCards = computed(() => {
         </template>
       </UTabs>
     </div>
+
+    <!-- 版本更新详情弹窗 -->
+    <UModal v-model:open="versionModalOpen" scrollable :ui="{ content: 'max-w-lg max-h-[85vh]' }">
+      <template #content>
+        <UCard>
+          <template #header>
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-sparkles" class="size-5 text-(--ui-primary)" />
+              <span class="font-semibold">发现新版本</span>
+            </div>
+          </template>
+          <div class="space-y-4">
+            <div class="flex items-center gap-2 rounded-lg bg-(--ui-bg-elevated) px-4 py-3 text-sm">
+              <span class="font-medium text-white">{{ versionInfo?.current_version }}</span>
+              <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0 text-(--ui-muted)" />
+              <span class="font-semibold text-green-500">{{ versionInfo?.latest_version }}</span>
+            </div>
+            <div class="max-h-[42vh] overflow-y-auto rounded-lg border border-(--ui-border) p-4 text-sm leading-relaxed text-(--ui-text)" v-html="releaseNotesHtml"></div>
+          </div>
+          <template #footer>
+            <div class="flex items-center justify-between gap-2">
+              <UButton icon="i-lucide-external-link" variant="outline" color="neutral" :to="versionInfo?.release_url" target="_blank">查看Release</UButton>
+              <div class="flex items-center gap-2">
+                <UButton variant="subtle" color="neutral" @click="versionModalOpen = false">关闭</UButton>
+              </div>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
   </div>
 </template>

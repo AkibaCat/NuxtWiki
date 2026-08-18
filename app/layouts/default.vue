@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { user, ready, site, registrationOpen, init, logout } = useAuth()
+const route = useRoute()
 
 onMounted(() => {
   init()
@@ -8,6 +9,36 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
 })
+
+// ==================== 站点名称 + 页面标题（静态路由；动态标题由各页面在数据加载后覆盖） ====================
+const PAGE_TITLES: Record<string, string> = {
+  '/pages': '所有页面',
+  '/recent': '最近更改',
+  '/search': '搜索',
+  '/create': '创建页面',
+  '/login': '登录',
+  '/register': '注册',
+  '/admin': '后台管理',
+}
+
+const siteName = computed(() => site.value?.name || 'NuxtWiki')
+
+const routeTitle = computed(() => {
+  const name = siteName.value
+  const path = route.path
+
+  // 站点首页：仅站点名称
+  if (path === '/') return name
+
+  // 固定页面（/admin /login /search …）
+  if (PAGE_TITLES[path]) return `${name} | ${PAGE_TITLES[path]}`
+
+  // 其余（Wiki 页面 / 账户页）由对应组件加载数据后自行设置标题，此处仅兜底为站点名
+  return name
+})
+
+// 全局基础标题；Wiki 页面与账户页在各自组件内 useHead 动态覆盖
+useHead({ title: computed(() => routeTitle.value) })
 
 // 代码块复制：事件委托（v-html 注入的按钮无法直接绑定）
 const COPY_ICON = '<svg class="wiki-copy-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'

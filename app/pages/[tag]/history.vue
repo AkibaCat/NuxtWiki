@@ -38,6 +38,32 @@ const doRevert = async () => {
   }
 }
 
+// 删除修订
+const deleteTarget = ref<any>(null)
+const deleteOpen = ref(false)
+const deleting = ref(false)
+const confirmDeleteRevision = (n: any) => {
+  deleteTarget.value = n
+  deleteOpen.value = true
+}
+const doDeleteRevision = async () => {
+  const n = deleteTarget.value
+  if (!n) return
+  deleting.value = true
+  const r = await api.post('page.delete-revision', { tag: tag.value, revision: n.revision })
+  deleting.value = false
+  if (r.ok) {
+    toast.add({ title: `已删除 r${n.revision}`, color: 'success' })
+    deleteOpen.value = false
+    deleteTarget.value = null
+    // 重新加载修订列表
+    const rr = await api.get('page.revisions', { tag: tag.value })
+    if (rr.ok) revisions.value = (rr.data as any[]) ?? []
+  } else {
+    toast.add({ title: r.error?.message || '删除失败', color: 'error' })
+  }
+}
+
 onMounted(async () => {
   await init()
   const r = await api.get('page.revisions', { tag: tag.value })
@@ -86,6 +112,16 @@ onMounted(async () => {
             >
               回滚
             </UButton>
+            <UButton
+              v-if="isAdmin && n.revision < latestRevision"
+              icon="i-lucide-trash-2"
+              size="xs"
+              color="error"
+              variant="ghost"
+              @click="confirmDeleteRevision(n)"
+            >
+              删除
+            </UButton>
             <UButton :to="`/${tag}/diff?from=${n.revision === 1 ? 0 : n.revision - 1}&to=${n.revision}`" icon="i-lucide-git-compare" size="xs" color="neutral" variant="ghost">
               对比
             </UButton>
@@ -114,6 +150,28 @@ onMounted(async () => {
               <UButton variant="subtle" color="neutral" @click="revertOpen = false">取消</UButton>
               <UButton icon="i-lucide-rotate-ccw" color="warning" :loading="reverting" @click="doRevert">
                 确认回滚
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="deleteOpen" scrollable :ui="{ content: 'max-w-md max-h-[80vh]' }">
+      <template #content>
+        <UCard>
+          <template #header>确认删除修订</template>
+          <p class="text-sm text-(--ui-text)">
+            确定要删除 <span class="font-medium">{{ tag }}</span> 的修订
+            <span class="font-medium">r{{ deleteTarget?.revision }}</span>
+            （{{ deleteTarget?.title }}）吗？
+            <span class="text-(--ui-muted)">该修订将被永久移除，无法恢复。</span>
+          </p>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton variant="subtle" color="neutral" @click="deleteOpen = false">取消</UButton>
+              <UButton icon="i-lucide-trash-2" color="error" :loading="deleting" @click="doDeleteRevision">
+                确认删除
               </UButton>
             </div>
           </template>

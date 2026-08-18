@@ -13,6 +13,9 @@ const saving = ref(false)
 const mode = ref<'edit' | 'preview'>('edit')
 const canEdit = ref(false)
 const exists = ref(false)
+// 加载时的原始内容（用于保存时无变动校验）
+const originalTitle = ref('')
+const originalBody = ref('')
 const textarea = ref()
 
 const getTextarea = () => (document.querySelector('textarea[data-slot="base"]') as HTMLTextAreaElement | null) ?? null
@@ -86,6 +89,8 @@ onMounted(async () => {
       exists.value = true
       title.value = d.page.title
       body.value = d.page.body
+      originalTitle.value = d.page.title
+      originalBody.value = d.page.body
       history.value = [body.value]
       redoStack.value = []
     } else {
@@ -150,6 +155,12 @@ const tools = [
 const save = async () => {
   if (!title.value.trim()) {
     toast.add({ title: '请填写标题', color: 'error' })
+    return
+  }
+  // 无变动校验：标题与正文均未改变则不保存（新建页面不受限）
+  if (exists.value && title.value === originalTitle.value && body.value === originalBody.value) {
+    toast.add({ title: '页面内容无改动，此次操作无效', color: 'error' })
+    await navigateTo(`/${tag.value}`)
     return
   }
   saving.value = true

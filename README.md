@@ -40,8 +40,8 @@
 │  Nginx/Apache  │       │  index.php → Router → Controller │
 │  / Kangle      │       │  PDO 直连数据库                   │
 └────────────────┘       └──────────┬───────────────┬───────┘
-                                 │               │
-                          MySQL（生产）      SQLite（本地）
+                                    │               │
+                              MySQL（生产）      SQLite（本地）
 ```
 
 前端通过根路径绝对地址访问资源（`/api/index.php`、`/_nuxt/...`），因此站点需部署在**域名根路径**；如需部署到子目录，请重新构建并配置 `app.baseURL` 与 `NUXT_PUBLIC_API_BASE`。

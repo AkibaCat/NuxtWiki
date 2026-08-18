@@ -1,5 +1,9 @@
 {
   "name": "NuxtWiki",
+  "versions": {
+    "id": 3,
+    "version": "1.1.1" 
+  },
   "private": true,
   "type": "module",
   "scripts": {
