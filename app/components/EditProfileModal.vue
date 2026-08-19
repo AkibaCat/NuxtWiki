@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 个人资料编辑弹窗：基础资料表单 + 社交账号，以及头像上传（读取本地图片并通过 1:1 视口裁剪压缩后上传）。
+const { t } = useI18n()
 const { user } = useAuth()
 const api = useApi()
 const toast = useToast()
@@ -18,12 +20,12 @@ const form = reactive({
 })
 
 const socialDefs: { key: keyof typeof form.socials; label: string; icon: string; placeholder: string }[] = [
-  { key: 'qq', label: 'QQ', icon: 'i-simple-icons-qq', placeholder: 'QQ 号码' },
-  { key: 'wechat', label: 'WeChat', icon: 'i-simple-icons-wechat', placeholder: '微信号' },
-  { key: 'bilibili', label: 'BiliBili', icon: 'i-simple-icons-bilibili', placeholder: '哔哩哔哩主页链接' },
-  { key: 'youtube', label: 'YouTube', icon: 'i-simple-icons-youtube', placeholder: 'YouTube 频道链接' },
-  { key: 'github', label: 'GitHub', icon: 'i-simple-icons-github', placeholder: 'GitHub 主页链接' },
-  { key: 'x', label: 'X', icon: 'i-simple-icons-x', placeholder: 'X（Twitter）链接' },
+  { key: 'qq', label: 'QQ', icon: 'i-simple-icons-qq', placeholder: t('account.social.qq') },
+  { key: 'wechat', label: 'WeChat', icon: 'i-simple-icons-wechat', placeholder: t('account.social.wechat') },
+  { key: 'bilibili', label: 'BiliBili', icon: 'i-simple-icons-bilibili', placeholder: t('account.social.bilibili') },
+  { key: 'youtube', label: 'YouTube', icon: 'i-simple-icons-youtube', placeholder: t('account.social.youtube') },
+  { key: 'github', label: 'GitHub', icon: 'i-simple-icons-github', placeholder: t('account.social.github') },
+  { key: 'x', label: 'X', icon: 'i-simple-icons-x', placeholder: t('account.social.x') },
 ]
 
 watch(open, (v) => {
@@ -57,11 +59,11 @@ const save = async () => {
   })
   saving.value = false
   if (r.ok) {
-    toast.add({ title: '个人资料已保存', color: 'success' })
+    toast.add({ title: t('account.saved'), color: 'success' })
     open.value = false
     emit('saved')
   } else {
-    toast.add({ title: r.error?.message || '保存失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('account.saveFailed'), color: 'error' })
   }
 }
 
@@ -98,7 +100,6 @@ const onAvatarFile = (e: Event) => {
   reader.readAsDataURL(file)
 }
 
-/** 关闭裁剪弹窗 */
 const closeCrop = () => {
   cropOpen.value = false
   cropSrc.value = ''
@@ -170,9 +171,9 @@ const confirmCrop = () => {
     avatarUploading.value = false
     if (r.ok && r.data?.user) {
       form.avatar = r.data.user.avatar
-      toast.add({ title: '头像已上传', color: 'success' })
+      toast.add({ title: t('account.avatarUploaded'), color: 'success' })
     } else {
-      toast.add({ title: r.error?.message || '头像上传失败', color: 'error' })
+      toast.add({ title: r.error?.message || t('account.avatarUploadFailed'), color: 'error' })
     }
   }, 'image/webp', 0.85)
 }
@@ -182,38 +183,38 @@ const confirmCrop = () => {
   <UModal v-model:open="open" scrollable :ui="{ content: 'sm:max-w-4xl' }">
     <template #content>
       <UCard :ui="{ root: 'flex flex-col max-h-[80vh] overflow-hidden', body: 'min-h-0 flex-1 overflow-y-auto' }">
-        <template #header>修改个人资料</template>
+        <template #header>{{ t('account.editProfileTitle') }}</template>
         <div v-if="loading" class="flex justify-center py-16">
           <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-(--ui-primary)" />
         </div>
         <template v-else>
           <div class="space-y-4">
-            <UFormField label="昵称">
-              <UInput v-model="form.nickname" placeholder="昵称" class="w-full" />
+            <UFormField :label="t('account.nickname')">
+              <UInput v-model="form.nickname" :placeholder="t('account.nickname')" class="w-full" />
             </UFormField>
-            <UFormField label="头像">
+            <UFormField :label="t('account.avatar')">
               <div class="flex items-center gap-3">
-                <img v-if="form.avatar" :src="form.avatar" alt="头像" class="size-14 rounded-full object-cover border border-(--ui-border) shrink-0" />
+                <img v-if="form.avatar" :src="form.avatar" :alt="t('account.avatar')" class="size-14 rounded-full object-cover border border-(--ui-border) shrink-0" />
                 <UAvatar v-else :alt="user?.username || '?'" size="lg" :text="form.nickname ? form.nickname.charAt(0) : (user?.username?.charAt(0) || '?')" />
                 <div class="flex flex-col gap-1">
                   <UButton icon="i-lucide-upload" variant="subtle" size="sm" :loading="avatarUploading" @click="triggerAvatarSelect">
-                    上传图片
+                    {{ t('account.uploadImage') }}
                   </UButton>
                   <UButton v-if="form.avatar" icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" @click="form.avatar = ''">
-                    移除头像
+                    {{ t('account.removeAvatar') }}
                   </UButton>
                 </div>
                 <input ref="avatarInput" type="file" accept="image/*" class="hidden" @change="onAvatarFile" />
               </div>
             </UFormField>
-            <UFormField label="个人介绍">
-              <UTextarea v-model="form.bio" placeholder="介绍一下自己…" :rows="3" class="w-full" />
+            <UFormField :label="t('account.bioLabel')">
+              <UTextarea v-model="form.bio" :placeholder="t('account.bioPlaceholder')" :rows="3" class="w-full" />
             </UFormField>
-            <UFormField label="邮箱">
+            <UFormField :label="t('account.email')">
               <UInput v-model="form.email" type="email" placeholder="you@example.com" class="w-full" />
             </UFormField>
             <div>
-              <p class="text-sm font-medium mb-2">外部社交连接</p>
+              <p class="text-sm font-medium mb-2">{{ t('account.socialExternal') }}</p>
               <div class="grid gap-3 sm:grid-cols-2">
                 <UFormField v-for="d in socialDefs" :key="d.key" :label="d.label">
                   <UInput v-model="form.socials[d.key]" :icon="d.icon" :placeholder="d.placeholder" class="w-full" />
@@ -224,8 +225,8 @@ const confirmCrop = () => {
         </template>
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton variant="subtle" color="neutral" @click="open = false">取消</UButton>
-            <UButton icon="i-lucide-check" :loading="saving" @click="save">保存</UButton>
+            <UButton variant="subtle" color="neutral" @click="open = false">{{ t('common.cancel') }}</UButton>
+            <UButton icon="i-lucide-check" :loading="saving" @click="save">{{ t('common.save') }}</UButton>
           </div>
         </template>
       </UCard>
@@ -236,7 +237,7 @@ const confirmCrop = () => {
   <UModal v-model:open="cropOpen" scrollable :ui="{ content: 'max-h-[80vh]' }">
     <template #content>
       <UCard>
-        <template #header>裁剪头像（1:1）</template>
+        <template #header>{{ t('account.cropAvatar') }}</template>
         <div
           ref="cropViewport"
           class="relative mx-auto rounded-lg border border-(--ui-border) overflow-hidden bg-(--ui-bg-elevated) select-none touch-none"
@@ -270,8 +271,8 @@ const confirmCrop = () => {
         </div>
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton variant="subtle" color="neutral" @click="closeCrop">取消</UButton>
-            <UButton icon="i-lucide-check" @click="confirmCrop">确认</UButton>
+            <UButton variant="subtle" color="neutral" @click="closeCrop">{{ t('common.cancel') }}</UButton>
+            <UButton icon="i-lucide-check" @click="confirmCrop">{{ t('common.confirm') }}</UButton>
           </div>
         </template>
       </UCard>

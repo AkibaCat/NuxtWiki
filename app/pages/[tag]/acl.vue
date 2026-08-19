@@ -1,25 +1,28 @@
 <script setup lang="ts">
+// 页面职责：配置页面读/写/历史等各项权限所需的访问级别
 const route = useRoute()
 const api = useApi()
 const { user, init } = useAuth()
 const toast = useToast()
+const { t } = useI18n()
 const tag = computed(() => String(route.params.tag || ''))
 
 const levelOptions = [
-  { label: '访客（未登录）', value: 0 },
-  { label: '管理员', value: 1 },
-  { label: '高级用户', value: 2 },
-  { label: '普通用户', value: 3 }
+  { label: 'acl.levelGuest', value: 0 },
+  { label: 'acl.levelAdmin', value: 1 },
+  { label: 'acl.levelPower', value: 2 },
+  { label: 'acl.levelUser', value: 3 }
 ]
+const levelItems = computed(() => levelOptions.map((o) => ({ value: o.value, label: t(o.label) })))
 
 const permDefs = [
-  { key: 'read', label: '阅读权限', icon: 'i-lucide-eye', hint: '谁可以阅读本页面', def: 0 },
-  { key: 'edit', label: '编辑权限', icon: 'i-lucide-pencil', hint: '谁可以编辑本页面', def: 3 },
-  { key: 'history', label: '历史权限', icon: 'i-lucide-history', hint: '谁可以查看修订历史', def: 3 },
-  { key: 'diff', label: '对比权限', icon: 'i-lucide-git-compare', hint: '谁可以对比版本差异', def: 2 },
-  { key: 'backlinks', label: '回链权限', icon: 'i-lucide-link', hint: '谁可以查看反向链接', def: 3 },
-  { key: 'acl', label: '权限管理', icon: 'i-lucide-shield', hint: '谁可以修改本页权限', def: 1 },
-  { key: 'contributors', label: '贡献者', icon: 'i-lucide-users', hint: '谁可以查看贡献者列表', def: 0 }
+  { key: 'read', label: 'acl.permRead', icon: 'i-lucide-eye', hint: 'acl.hintRead', def: 0 },
+  { key: 'edit', label: 'acl.permEdit', icon: 'i-lucide-pencil', hint: 'acl.hintEdit', def: 3 },
+  { key: 'history', label: 'acl.permHistory', icon: 'i-lucide-history', hint: 'acl.hintHistory', def: 3 },
+  { key: 'diff', label: 'acl.permDiff', icon: 'i-lucide-git-compare', hint: 'acl.hintDiff', def: 2 },
+  { key: 'backlinks', label: 'acl.permBacklinks', icon: 'i-lucide-link', hint: 'acl.hintBacklinks', def: 3 },
+  { key: 'acl', label: 'acl.permAcl', icon: 'i-lucide-shield', hint: 'acl.hintAcl', def: 1 },
+  { key: 'contributors', label: 'acl.permContributors', icon: 'i-lucide-users', hint: 'acl.hintContributors', def: 0 }
 ]
 
 const perms = reactive<Record<string, number>>({})
@@ -42,7 +45,7 @@ onMounted(async () => {
       perms[p.key] = v >= 0 && v <= 3 ? v : p.def
     }
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('acl.loadFailed')
   }
   loading.value = false
 })
@@ -54,9 +57,9 @@ const save = async () => {
   const r = await api.post('page.update-acl', payload)
   saving.value = false
   if (r.ok) {
-    toast.add({ title: '权限已更新', color: 'success' })
+    toast.add({ title: t('acl.saved'), color: 'success' })
   } else {
-    toast.add({ title: r.error?.message || '保存失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('acl.saveFailed'), color: 'error' })
   }
 }
 </script>
@@ -65,9 +68,9 @@ const save = async () => {
   <div class="max-w-2xl mx-auto px-4 py-8">
     <div class="flex items-center gap-3 mb-6">
       <UButton :to="`/${tag}`" icon="i-lucide-arrow-left" size="xs" color="neutral" variant="ghost">
-        返回页面
+        {{ t('acl.back') }}
       </UButton>
-      <h1 class="text-2xl font-bold">访问控制</h1>
+      <h1 class="text-2xl font-bold">{{ t('acl.title') }}</h1>
     </div>
 
     <div v-if="loading" class="flex justify-center py-16">
@@ -84,23 +87,23 @@ const save = async () => {
           <UFormField
             v-for="p in permDefs"
             :key="p.key"
-            :label="`${p.label} [${perms[p.key]}]`"
-            :hint="p.hint"
+            :label="`${t(p.label)} [${perms[p.key]}]`"
+            :hint="t(p.hint)"
           >
-            <USelect v-model="perms[p.key]" :items="levelOptions" class="w-full" />
+            <USelect v-model="perms[p.key]" :items="levelItems" class="w-full" />
           </UFormField>
           <UAlert
             color="info"
             variant="subtle"
             icon="i-lucide-info"
-            title="权限等级说明"
-            description="等级数字越小代表越宽松：0 = 访客（未登录），1 = 管理员，2 = 高级用户，3 = 普通用户。选中某项即代表该等级及更高级的用户可执行此操作（管理员拥有最高权限）。"
+            :title="t('acl.levelInfoTitle')"
+            :description="t('acl.levelInfoDesc')"
           />
         </div>
 
         <template #footer>
           <UButton icon="i-lucide-save" :loading="saving" @click="save">
-            保存权限
+            {{ t('acl.save') }}
           </UButton>
         </template>
       </UCard>

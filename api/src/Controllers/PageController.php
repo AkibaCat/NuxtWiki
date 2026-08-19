@@ -242,6 +242,7 @@ final class PageController
         $now = Database::now();
         $userId = $user !== null ? (int)$user['id'] : null;
 
+        // 新建页面：插入页面记录并写入首个修订（revision=1）
         if ($page === null) {
             $st = $db->prepare(
                 'INSERT INTO ' . Database::qi('pages')
@@ -265,6 +266,7 @@ final class PageController
             Response::data(['created' => true, 'tag' => $tag, 'revision' => 1], 201);
         }
 
+        // 更新现有页面：递增修订号并写入新修订
         $newRevision = (int)$page['revision'] + 1;
         $st = $db->prepare(
             'UPDATE ' . Database::qi('pages') . ' SET ' . Database::qi('title') . ' = ?, ' . Database::qi('body') . ' = ?, '

@@ -3,6 +3,7 @@ export interface SiteInfo {
   description: string
   home_tag: string
   site_footer: string
+  language: string
 }
 
 export interface UserInfo {

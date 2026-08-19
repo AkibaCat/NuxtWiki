@@ -1,5 +1,8 @@
 <script setup lang="ts">
+// 页面详情视图：按 tag 加载并渲染 Wiki 页面。负责页面标题、目录（TOC）、订阅开关、返回顶部，以及桌面端三栏布局。
 const props = defineProps<{ tag: string }>()
+
+const { t } = useI18n()
 
 const api = useApi()
 const { user, ready, init } = useAuth()
@@ -20,7 +23,7 @@ const pageTitle = computed(() => {
   const title = page.value?.page?.title
   if (!title) return null
   // Home 为特殊页：固定显示「首页」
-  if (isHome.value) return `${siteName.value} | 首页`
+  if (isHome.value) return `${siteName.value} | ${t('nav.home')}`
   return `${siteName.value} | ${title}`
 })
 
@@ -30,7 +33,6 @@ onUnmounted(() => setTitle(null))
 // ==================== 目录（TOC）：状态写入 + 跳转逻辑 ====================
 const { setToc, scrollToHeading } = useToc()
 
-// 订阅
 const watching = ref(false)
 const watchBusy = ref(false)
 
@@ -42,7 +44,7 @@ const load = async () => {
     page.value = r.data
     watching.value = !!r.data.watching
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('wiki.loadError')
   }
   loading.value = false
 }
@@ -63,6 +65,7 @@ let scrollTicking = false
 const onScroll = () => {
   if (scrollTicking) return
   scrollTicking = true
+  // 用 requestAnimationFrame 合并滚动事件，避免高频触发重复计算
   window.requestAnimationFrame(() => {
     const max = document.documentElement.scrollHeight - window.innerHeight
     scrollProgress.value = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0
@@ -131,8 +134,8 @@ const toggleWatch = async () => {
     <div v-else-if="!page?.exists" class="max-w-4xl mx-auto text-center py-16">
       <UIcon name="i-lucide-file-question" class="size-12 text-(--ui-muted) mb-4" />
       <h1 class="text-2xl font-bold mb-2">{{ page.tag }}</h1>
-      <p class="text-(--ui-muted) mb-6">该页面尚未创建。</p>
-      <UButton v-if="canEdit" :to="`/editor?open=${encodeURIComponent(page.tag)}`" icon="i-lucide-plus" label="创建此页面" />
+      <p class="text-(--ui-muted) mb-6">{{ t('wiki.pageNotFound') }}</p>
+      <UButton v-if="canEdit" :to="`/editor?open=${encodeURIComponent(page.tag)}`" icon="i-lucide-plus" :label="t('wiki.createPage')" />
     </div>
 
     <!-- 桌面端三栏：左=所有页面导航 / 中=页面内容(保持居中) / 右=本页内容导航；移动端仅显示内容 -->
@@ -141,8 +144,8 @@ const toggleWatch = async () => {
       <aside class="hidden xl:flex xl:justify-end xl:sticky xl:top-24 xl:self-start">
         <div class="w-full max-w-56 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4 text-sm max-h-[calc(100vh-7rem)] overflow-y-auto">
           <p class="font-semibold mb-2 flex items-center justify-between">
-            <span>所有页面</span>
-            <NuxtLink to="/pages" class="text-xs font-normal text-(--ui-primary) no-underline hover:opacity-80">全部</NuxtLink>
+            <span>{{ t('nav.pages') }}</span>
+            <NuxtLink to="/pages" class="text-xs font-normal text-(--ui-primary) no-underline hover:opacity-80">{{ t('wiki.all') }}</NuxtLink>
           </p>
           <nav v-if="allPages.length">
             <NuxtLink
@@ -153,7 +156,7 @@ const toggleWatch = async () => {
               :class="p.tag === page.page.tag ? 'text-(--ui-primary) font-medium' : 'text-(--ui-muted) hover:text-(--ui-primary)'"
             >{{ p.title }}</NuxtLink>
           </nav>
-          <p v-else class="text-(--ui-muted)">暂无页面</p>
+          <p v-else class="text-(--ui-muted)">{{ t('wiki.noPages') }}</p>
         </div>
       </aside>
 
@@ -165,7 +168,7 @@ const toggleWatch = async () => {
             <div class="flex items-center gap-1 shrink-0">
               <UButton
                 :icon="watching ? 'i-lucide-bell-ring' : 'i-lucide-bell'"
-                :label="watching ? '已订阅' : '订阅'"
+                :label="watching ? t('wiki.unwatch') : t('wiki.watch')"
                 size="sm"
                 color="neutral"
                 variant="subtle"
@@ -176,26 +179,26 @@ const toggleWatch = async () => {
           </div>
           <!-- 页面信息：移动端更新时间换行显示 -->
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-(--ui-muted)">
-            <span>版本 {{ page.page.revision }}</span>
+            <span>{{ t('wiki.revision') }} {{ page.page.revision }}</span>
             <span>·</span>
-            <span>阅读 {{ formatCount(page.page.hits) }}</span>
+            <span>{{ t('wiki.hits') }} {{ formatCount(page.page.hits) }}</span>
             <span>·</span>
-            <span>订阅 {{ formatCount(page.subscriber_count) }}</span>
+            <span>{{ t('wiki.subscribers') }} {{ formatCount(page.subscriber_count) }}</span>
             <span>·</span>
-            <span>贡献者 {{ page.contributors?.length || 0 }}</span>
-            <span class="w-full sm:w-auto">最后更新 {{ formatDate(page.page.updated_at) }}</span>
-            <span v-if="page.page.last_editor"> 编辑者 {{ page.page.last_nickname || page.page.last_editor }}</span>
+            <span>{{ t('wiki.contributors') }} {{ page.contributors?.length || 0 }}</span>
+            <span class="w-full sm:w-auto">{{ t('wiki.lastModified') }} {{ formatDate(page.page.updated_at) }}</span>
+            <span v-if="page.page.last_editor"> {{ t('wiki.lastEditor') }} {{ page.page.last_nickname || page.page.last_editor }}</span>
           </div>
         </div>
 
         <!-- 操作按钮（移动端可横向滚动） -->
         <div class="flex items-center gap-1 mb-6 border-b border-b-(--ui-border) pb-3 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <UButton v-if="canEdit" :to="`/editor?open=${encodeURIComponent(page.page.tag)}`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" label="编辑" />
-          <UButton v-if="canHistory" :to="`/${page.page.tag}/history`" icon="i-lucide-history" size="xs" color="neutral" variant="ghost" label="历史" />
-          <UButton v-if="canDiff" :to="`/${page.page.tag}/diff`" icon="i-lucide-git-compare" size="xs" color="neutral" variant="ghost" label="对比" />
-          <UButton v-if="canBacklinks" :to="`/${page.page.tag}/backlinks`" icon="i-lucide-link" size="xs" color="neutral" variant="ghost" label="回链" />
-          <UButton v-if="canAcl" :to="`/${page.page.tag}/acl`" icon="i-lucide-shield" size="xs" color="neutral" variant="ghost" label="权限" />
-          <UButton v-if="canContributors" :to="`/${page.page.tag}/contributors`" icon="i-lucide-users" size="xs" color="neutral" variant="ghost" label="贡献者" />
+          <UButton v-if="canEdit" :to="`/editor?open=${encodeURIComponent(page.page.tag)}`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" :label="t('wiki.edit')" />
+          <UButton v-if="canHistory" :to="`/${page.page.tag}/history`" icon="i-lucide-history" size="xs" color="neutral" variant="ghost" :label="t('wiki.history')" />
+          <UButton v-if="canDiff" :to="`/${page.page.tag}/diff`" icon="i-lucide-git-compare" size="xs" color="neutral" variant="ghost" :label="t('wiki.diff')" />
+          <UButton v-if="canBacklinks" :to="`/${page.page.tag}/backlinks`" icon="i-lucide-link" size="xs" color="neutral" variant="ghost" :label="t('wiki.backlinks')" />
+          <UButton v-if="canAcl" :to="`/${page.page.tag}/acl`" icon="i-lucide-shield" size="xs" color="neutral" variant="ghost" :label="t('wiki.acl')" />
+          <UButton v-if="canContributors" :to="`/${page.page.tag}/contributors`" icon="i-lucide-users" size="xs" color="neutral" variant="ghost" :label="t('wiki.contributors')" />
         </div>
 
         <div class="wiki-content" v-html="rendered?.html"></div>
@@ -205,13 +208,13 @@ const toggleWatch = async () => {
       <aside class="hidden xl:flex xl:justify-start xl:sticky xl:top-24 xl:self-start">
         <div class="w-full max-w-56 rounded-lg border border-(--ui-border) bg-(--ui-bg-elevated) p-4 text-sm max-h-[calc(100vh-7rem)] overflow-y-auto">
           <p class="font-semibold mb-2 flex items-center justify-between gap-2">
-            <span>本页目录</span>
+            <span>{{ t('wiki.toc') }}</span>
             <UButton
               color="neutral"
               variant="ghost"
               size="xs"
               icon="i-lucide-arrow-up"
-              label="返回顶部"
+              :label="t('wiki.backToTop')"
               class="toc-back-top"
               @click="scrollToTop"
             />
@@ -227,7 +230,7 @@ const toggleWatch = async () => {
               v-html="item.text"
             />
           </nav>
-          <p v-else class="text-(--ui-muted)">本页暂无目录</p>
+          <p v-else class="text-(--ui-muted)">{{ t('wiki.noToc') }}</p>
         </div>
       </aside>
     </div>
@@ -237,7 +240,7 @@ const toggleWatch = async () => {
       v-if="showBackTop"
       @click="scrollToTop"
       class="fixed bottom-6 right-6 z-50 size-14 rounded-full shadow-lg transition-opacity hover:opacity-90 flex items-center justify-center bg-(--ui-bg)"
-      aria-label="返回顶部"
+      :aria-label="t('wiki.backToTop')"
     >
       <svg class="absolute inset-0 size-full" viewBox="0 0 56 56" aria-hidden="true">
         <!-- 背景环 -->

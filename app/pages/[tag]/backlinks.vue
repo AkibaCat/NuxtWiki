@@ -1,6 +1,8 @@
 <script setup lang="ts">
+// 页面职责：展示反向链接到当前页面的 wiki 页面
 const route = useRoute()
 const api = useApi()
+const { t } = useI18n()
 const tag = computed(() => String(route.params.tag || ''))
 
 const backlinks = ref<any[]>([])
@@ -12,7 +14,7 @@ onMounted(async () => {
   if (r.ok) {
     backlinks.value = (r.data as any[]) ?? []
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('backlinks.loadFailed')
   }
   loading.value = false
 })
@@ -22,9 +24,9 @@ onMounted(async () => {
   <div class="max-w-3xl mx-auto px-4 py-8">
     <div class="flex items-center gap-3 mb-6">
       <UButton :to="`/${tag}`" icon="i-lucide-arrow-left" size="xs" color="neutral" variant="ghost">
-        返回页面
+        {{ t('backlinks.back') }}
       </UButton>
-      <h1 class="text-2xl font-bold">反向链接</h1>
+      <h1 class="text-2xl font-bold">{{ t('backlinks.title') }}</h1>
     </div>
 
     <div v-if="loading" class="flex justify-center py-16">
@@ -33,7 +35,7 @@ onMounted(async () => {
     <div v-else-if="error" class="text-center py-16 text-(--ui-error)">{{ error }}</div>
     <div v-else>
       <p class="text-sm text-(--ui-muted) mb-4">
-        以下 {{ backlinks.length }} 个页面链接到
+        {{ t('backlinks.count', { count: backlinks.length }) }}
         <code class="bg-(--ui-bg-elevated) px-1 rounded">[[{{ tag }}]]</code>
       </p>
       <ul v-if="backlinks.length" class="divide-y divide-(--ui-border) rounded-lg border border-(--ui-border)">
@@ -44,7 +46,7 @@ onMounted(async () => {
           <span class="text-xs text-(--ui-muted) ml-2">{{ e.tag }}</span>
         </li>
       </ul>
-      <p v-else class="text-center py-16 text-(--ui-muted)">没有页面链接到本页</p>
+      <p v-else class="text-center py-16 text-(--ui-muted)">{{ t('backlinks.empty') }}</p>
     </div>
   </div>
 </template>

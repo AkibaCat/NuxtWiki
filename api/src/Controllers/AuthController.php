@@ -16,6 +16,7 @@ final class AuthController
                 'description' => Settings::siteDescription(),
                 'home_tag'    => Settings::homeTag(),
                 'site_footer' => Settings::siteFooter(),
+                'language'    => Settings::siteLanguage(),
             ],
         ]);
     }

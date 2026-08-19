@@ -16,6 +16,7 @@ export interface ApiResult<T = any> {
 export const useApi = () => {
   const config = useRuntimeConfig()
   const { csrf } = useAuthState()
+  const { t } = useI18n()
 
   const base = () => (config.public.apiBase as string || '/api/index.php')
 
@@ -42,6 +43,7 @@ export const useApi = () => {
       skipCsrf?: boolean
     } = {}
   ): Promise<ApiResult<T>> => {
+    // 默认方法：携带请求体时用 POST，否则用 GET
     const { method = opts.body || opts.formData ? 'POST' : 'GET', body, query, formData, skipCsrf } = opts
     const headers: Record<string, string> = {}
     if (csrf.value && !skipCsrf && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
@@ -73,7 +75,7 @@ export const useApi = () => {
       json.status = res.status
       return json
     }
-    return { ok: false, status: res.status, error: { code: 'NETWORK', message: '无法连接到服务器' } }
+    return { ok: false, status: res.status, error: { code: 'NETWORK', message: t('common.networkError') } }
   }
 
   const get = <T = any>(action: string, query?: Record<string, string | number | undefined>) =>

@@ -85,8 +85,6 @@ pnpm generate
 - 仓库 → **Actions** → 选择最新一次运行 → 底部 **Artifacts** → 下载 `nuxtwiki-deploy` 即可。
 - 正式版本也可在仓库的 **Releases** 页面获取：Releases 页 → 对应版本标签 → **Assets**（源码压缩包与随附的部署包）。
 
-> 说明：Releases 附件由**仓库所有者**（发布者）在 GitHub Releases 页面手动创建并上传，非自动化生成；部署包也可直接用上文 CI Artifacts 的产物。
-
 ### 3.4 通过 gh-pages 分支拉取
 
 CI 构建完成后还会把产物**直接推送到 `gh-pages` 分支**（由 `peaceiris/actions-gh-pages` 完成），因此可直接拉取该分支的内容部署，无需在本地构建：
@@ -99,7 +97,8 @@ git checkout -b gh-pages origin/gh-pages   # 首次：基于远程分支创建�
 
 - 该分支的根目录即站点根目录内容（`index.html`、`api/`、`_nuxt/` 等），拉取后上传到服务器站点根目录即可。
 - 由于 `gh-pages` 分支使用 `force_orphan: true` 每次完全重建，**不要**在它上面直接修改再推送，否则会被下一次 CI 覆盖；对站点内容的长期修改应回到 `main` 分支维护。
-- 该分支通常用于「服务器通过 git 拉取部署」的自动化场景；若只是下载部署包，用上文 3.3 的 Artifacts 更方便。
+- 该分支通常用于「服务器通过 git 拉取部署」的自动化场景
+- 若只是下载部署包，用上文 3.3 的 Artifacts 或从仓库 **Releases** 页面的 Assets 下载更方便。
 
 ---
 

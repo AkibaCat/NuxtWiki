@@ -1,6 +1,18 @@
 <script setup lang="ts">
 const { settings, resolvedHex, setColor } = useThemeSettings()
 const colorMode = useColorMode()
+const { t } = useI18n()
+
+// 设置页：界面语言 / 主题色 / 明暗主题偏好（均保存在浏览器本地）
+// 界面语言切换（设置页选择，记入浏览器本地；首次访问按站点默认语言）
+const lang = useWikiLocale()
+const langOptions = computed(() =>
+  (lang.locales.value as { code: string; name: string }[]).map(l => ({ label: l.name, value: l.code }))
+)
+const currentLang = computed({
+  get: () => lang.locale.value as string,
+  set: (v: string) => lang.choose(v),
+})
 
 // 暗亮切换（写入 color-mode 偏好，随浏览器本地保存）
 const isDark = computed({
@@ -9,42 +21,43 @@ const isDark = computed({
 })
 
 // 所有预设色（按色系排列）；曜石黑仅亮色显示、象牙白仅暗色显示（mode 为空表示双端均显示）
-const presetColors: { key: ThemeColor; label: string; mode?: 'light' | 'dark' }[] = [
+// 用 computed 包裹，使其在切换语言时重新求值 t()，保证色名实时更新
+const presetColors = computed<{ key: ThemeColor; label: string; mode?: 'light' | 'dark' }[]>(() => [
   // 红粉色系
-  { key: 'sakura', label: '樱花粉' },
-  { key: 'coral', label: '珊瑚粉' },
-  { key: 'red', label: '中国红' },
-  { key: 'wine', label: '酒红色' },
+  { key: 'sakura', label: t('settings.colors.sakura') },
+  { key: 'coral', label: t('settings.colors.coral') },
+  { key: 'red', label: t('settings.colors.red') },
+  { key: 'wine', label: t('settings.colors.wine') },
   // 橙黄系
-  { key: 'orange', label: '活力橙' },
-  { key: 'maple', label: '枫叶橙' },
-  { key: 'yellow', label: '柠檬黄' },
-  { key: 'ginger', label: '姜黄色' },
+  { key: 'orange', label: t('settings.colors.orange') },
+  { key: 'maple', label: t('settings.colors.maple') },
+  { key: 'yellow', label: t('settings.colors.yellow') },
+  { key: 'ginger', label: t('settings.colors.ginger') },
   // 绿色系
-  { key: 'green', label: '科技绿' },
-  { key: 'mint', label: '薄荷绿' },
-  { key: 'matcha', label: '抹茶绿' },
-  { key: 'darkgreen', label: '墨绿色' },
+  { key: 'green', label: t('settings.colors.green') },
+  { key: 'mint', label: t('settings.colors.mint') },
+  { key: 'matcha', label: t('settings.colors.matcha') },
+  { key: 'darkgreen', label: t('settings.colors.darkgreen') },
   // 蓝色系
-  { key: 'sky', label: '天空蓝' },
-  { key: 'navy', label: '藏青色' },
-  { key: 'klain', label: '克莱因蓝' },
-  { key: 'haze', label: '雾霾蓝' },
-  { key: 'tiffany', label: '蒂芙尼蓝' },
+  { key: 'sky', label: t('settings.colors.sky') },
+  { key: 'navy', label: t('settings.colors.navy') },
+  { key: 'klain', label: t('settings.colors.klain') },
+  { key: 'haze', label: t('settings.colors.haze') },
+  { key: 'tiffany', label: t('settings.colors.tiffany') },
   // 紫色系
-  { key: 'purple', label: '忧郁紫' },
-  { key: 'taro', label: '香芋紫' },
+  { key: 'purple', label: t('settings.colors.purple') },
+  { key: 'taro', label: t('settings.colors.taro') },
   // 暖棕 / 中性
-  { key: 'milktea', label: '奶茶色' },
-  { key: 'coffee', label: '咖啡棕' },
-  { key: 'gray', label: '高级灰' },
-  { key: 'obsidian', label: '曜石黑', mode: 'light' },
-  { key: 'ivory', label: '象牙白', mode: 'dark' },
-]
+  { key: 'milktea', label: t('settings.colors.milktea') },
+  { key: 'coffee', label: t('settings.colors.coffee') },
+  { key: 'gray', label: t('settings.colors.gray') },
+  { key: 'obsidian', label: t('settings.colors.obsidian'), mode: 'light' },
+  { key: 'ivory', label: t('settings.colors.ivory'), mode: 'dark' },
+])
 
 // 当前模式可见色
 const visibleColors = computed(() =>
-  presetColors.filter(p => !p.mode || (p.mode === 'light' ? !isDark.value : isDark.value))
+  presetColors.value.filter(p => !p.mode || (p.mode === 'light' ? !isDark.value : isDark.value))
 )
 
 // 曜石黑/象牙白互为反色：切换明暗后，选中态应落在当前实际生效的那个上
@@ -64,14 +77,26 @@ const previewHex = computed(() => resolvedHex.value)
 
 <template>
   <div class="max-w-2xl mx-auto px-4 py-10">
-    <h1 class="text-2xl font-bold mb-1">设置</h1>
-    <p class="text-sm text-(--ui-muted) mb-8">自定义站点的主题表现，保存于本浏览器。</p>
+    <h1 class="text-2xl font-bold mb-1">{{ t('settings.title') }}</h1>
+    <p class="text-sm text-(--ui-muted) mb-8">{{ t('settings.subtitle') }}</p>
+
+    <!-- 界面语言 -->
+    <UCard class="mb-6">
+      <template #header><span class="font-semibold">{{ t('settings.language.title') }}</span></template>
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="font-medium">{{ t('settings.language.label') }}</p>
+          <p class="text-sm text-(--ui-muted)">{{ t('settings.language.hint') }}</p>
+        </div>
+        <USelect v-model="currentLang" :items="langOptions" class="w-44" :aria-label="t('settings.language.title')" />
+      </div>
+    </UCard>
 
     <!-- 主题色 -->
     <UCard class="mb-6">
       <template #header>
         <div class="flex items-center justify-between gap-3">
-          <span class="font-semibold">主题色</span>
+          <span class="font-semibold">{{ t('settings.theme') }}</span>
           <span class="flex items-center gap-2 text-sm text-(--ui-muted)">
             <span class="size-3 rounded-full" :style="{ background: previewHex }" />
             {{ previewHex.toUpperCase() }}
@@ -97,11 +122,11 @@ const previewHex = computed(() => resolvedHex.value)
 
     <!-- 页面暗亮 -->
     <UCard>
-      <template #header><span class="font-semibold">外观</span></template>
+      <template #header><span class="font-semibold">{{ t('settings.appearance') }}</span></template>
       <div class="flex items-center justify-between gap-4">
         <div>
-          <p class="font-medium">深色模式</p>
-          <p class="text-sm text-(--ui-muted)">在浅色与深色显示之间切换</p>
+          <p class="font-medium">{{ t('settings.darkMode') }}</p>
+          <p class="text-sm text-(--ui-muted)">{{ t('settings.darkModeHint') }}</p>
         </div>
         <USwitch v-model="isDark" />
       </div>

@@ -18,11 +18,16 @@ export const useToc = () => {
   const toggle = () => { open.value = !open.value }
   const close = () => { open.value = false }
 
-  // ---------- 目录跳转：平滑滚动 + 整节连续高亮覆盖层 ----------
+  // ---------- 目录跳转：平滑滚动到内容位置后再整节连续高亮 ----------
   const flashTimer = useState<ReturnType<typeof setTimeout> | null>('wiki.toc.flashTimer', () => null)
   const flashOverlay = useState<HTMLElement | null>('wiki.toc.flashOverlay', () => null)
+  const flashRaf = useState<number | null>('wiki.toc.flashRaf', () => null)
 
   const clearFlash = () => {
+    if (flashRaf.value != null) {
+      cancelAnimationFrame(flashRaf.value)
+      flashRaf.value = null
+    }
     if (flashOverlay.value) {
       const parent = flashOverlay.value.parentElement
       flashOverlay.value.remove()
@@ -35,14 +40,8 @@ export const useToc = () => {
     }
   }
 
-  const scrollToHeading = (id: string) => {
-    const el = document.getElementById(id)
-    if (!el) return
-    // 平滑滚动到目标标题（scroll-margin-top 已预留导航栏偏移）
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-
-    const container = el.closest('.wiki-content') as HTMLElement | null
-    if (!container) return
+  /** 在目标标题处创建整节闪烁覆盖层 */
+  const createFlash = (container: HTMLElement, el: HTMLElement) => {
     clearFlash()
 
     // 收集小节：目标标题 + 其后内容，直到下一个同级 / 更高级标题为止
@@ -67,6 +66,36 @@ export const useToc = () => {
     flashOverlay.value = overlay
 
     flashTimer.value = setTimeout(() => clearFlash(), 1000)
+  }
+
+  const scrollToHeading = (id: string) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    // 平滑滚动到目标标题（scroll-margin-top 已预留导航栏偏移）
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+    const container = el.closest('.wiki-content') as HTMLElement | null
+    if (!container) return
+    clearFlash()
+
+    // 先等平滑滚动结束，再触发闪烁，避免动画在滚动途中提前出现
+    const SCROLL_IDLE_DELTA = 2
+    const deadline = Date.now() + 1000
+    let lastY = window.scrollY
+    let stableFrames = 0
+    const poll = () => {
+      const y = window.scrollY
+      if (Math.abs(y - lastY) < SCROLL_IDLE_DELTA) stableFrames++
+      else stableFrames = 0
+      lastY = y
+      if (stableFrames >= 3 || Date.now() >= deadline) {
+        flashRaf.value = null
+        createFlash(container, el)
+        return
+      }
+      flashRaf.value = requestAnimationFrame(poll)
+    }
+    flashRaf.value = requestAnimationFrame(poll)
   }
 
   return { items, visible, open, setToc, toggle, close, scrollToHeading }

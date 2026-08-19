@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 带行号的 Markdown 编辑器（行号栏 + 自动换行开关 + 原生 textarea）。
 // 供普通编辑页与沉浸式页面编辑器复用。通过 defineExpose 暴露 textarea 供外部插入/光标操作。
+const { t } = useI18n()
 const props = defineProps<{
   modelValue: string
   placeholder?: string
@@ -24,7 +25,6 @@ const body = computed({
   set: (v: string) => emit('update:modelValue', v),
 })
 
-// 自动换行开关
 const wrap = ref(true)
 const toggleWrap = () => {
   wrap.value = !wrap.value
@@ -32,9 +32,8 @@ const toggleWrap = () => {
   requestAnimationFrame(syncScroll)
 }
 
-const wrapLabel = computed(() => (wrap.value ? '自动换行' : '不换行'))
+const wrapLabel = computed(() => (wrap.value ? t('editor.wrap') : t('editor.nowrap')))
 
-// 行号
 const gutterOuter = ref<HTMLDivElement>()
 const gutterInner = ref<HTMLDivElement>()
 const taRef = ref<HTMLTextAreaElement>()
@@ -50,7 +49,6 @@ const rowsPerLine = ref<number[]>(logicalLines.value.map(() => 1))
 // 行高与 textarea 保持一致（像素值，用于对齐）
 const LINE_H = 22
 
-// 外框圆角类名映射
 const cornerClass = computed(() => {
   const c = props.corner || 'all'
   return {

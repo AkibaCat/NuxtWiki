@@ -1,8 +1,10 @@
 <script setup lang="ts">
+// 页面职责：展示页面版本历史，管理员可回滚或删除修订
 const route = useRoute()
 const api = useApi()
 const { user, init } = useAuth()
 const toast = useToast()
+const { t } = useI18n()
 const tag = computed(() => String(route.params.tag || ''))
 
 const revisions = ref<any[]>([])
@@ -27,14 +29,14 @@ const doRevert = async () => {
   const r = await api.post('page.revert', { tag: tag.value, revision: n.revision })
   reverting.value = false
   if (r.ok) {
-    toast.add({ title: `已回滚到 r${n.revision}`, color: 'success' })
+    toast.add({ title: t('history.reverted', { revision: n.revision }), color: 'success' })
     revertOpen.value = false
     revertTarget.value = null
     // 重新加载修订列表
     const rr = await api.get('page.revisions', { tag: tag.value })
     if (rr.ok) revisions.value = (rr.data as any[]) ?? []
   } else {
-    toast.add({ title: r.error?.message || '回滚失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('history.revertFailed'), color: 'error' })
   }
 }
 
@@ -53,14 +55,14 @@ const doDeleteRevision = async () => {
   const r = await api.post('page.delete-revision', { tag: tag.value, revision: n.revision })
   deleting.value = false
   if (r.ok) {
-    toast.add({ title: `已删除 r${n.revision}`, color: 'success' })
+    toast.add({ title: t('history.deleted', { revision: n.revision }), color: 'success' })
     deleteOpen.value = false
     deleteTarget.value = null
     // 重新加载修订列表
     const rr = await api.get('page.revisions', { tag: tag.value })
     if (rr.ok) revisions.value = (rr.data as any[]) ?? []
   } else {
-    toast.add({ title: r.error?.message || '删除失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('history.deleteFailed'), color: 'error' })
   }
 }
 
@@ -70,7 +72,7 @@ onMounted(async () => {
   if (r.ok) {
     revisions.value = (r.data as any[]) ?? []
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('history.loadFailed')
   }
   loading.value = false
 })
@@ -80,9 +82,9 @@ onMounted(async () => {
   <div class="max-w-3xl mx-auto px-4 py-8">
     <div class="flex items-center gap-3 mb-6">
       <UButton :to="`/${tag}`" icon="i-lucide-arrow-left" size="xs" color="neutral" variant="ghost">
-        返回页面
+        {{ t('history.back') }}
       </UButton>
-      <h1 class="text-2xl font-bold">修订历史</h1>
+      <h1 class="text-2xl font-bold">{{ t('history.title') }}</h1>
     </div>
 
     <div v-if="loading" class="flex justify-center py-16">
@@ -110,7 +112,7 @@ onMounted(async () => {
               variant="ghost"
               @click="confirmRevert(n)"
             >
-              回滚
+              {{ t('history.revert') }}
             </UButton>
             <UButton
               v-if="isAdmin && n.revision < latestRevision"
@@ -120,36 +122,34 @@ onMounted(async () => {
               variant="ghost"
               @click="confirmDeleteRevision(n)"
             >
-              删除
+              {{ t('common.delete') }}
             </UButton>
             <UButton :to="`/${tag}/diff?from=${n.revision === 1 ? 0 : n.revision - 1}&to=${n.revision}`" icon="i-lucide-git-compare" size="xs" color="neutral" variant="ghost">
-              对比
+              {{ t('history.compare') }}
             </UButton>
           </div>
           <div class="text-right text-xs text-(--ui-muted) shrink-0">
-            <div>{{ n.nickname || n.username || '匿名' }}</div>
+            <div>{{ n.nickname || n.username || t('recent.anonymous') }}</div>
             <div>{{ formatDate(n.created_at) }}</div>
           </div>
         </li>
       </ul>
-      <p v-if="!revisions.length" class="text-center py-16 text-(--ui-muted)">暂无修订记录</p>
+      <p v-if="!revisions.length" class="text-center py-16 text-(--ui-muted)">{{ t('history.empty') }}</p>
     </div>
 
     <UModal v-model:open="revertOpen" scrollable :ui="{ content: 'max-w-md max-h-[80vh]' }">
       <template #content>
         <UCard>
-          <template #header>确认回滚</template>
+          <template #header>{{ t('history.confirmRevert') }}</template>
           <p class="text-sm text-(--ui-text)">
-            确定要将 <span class="font-medium">{{ tag }}</span> 回滚到
-            <span class="font-medium">r{{ revertTarget?.revision }}</span>
-            （{{ revertTarget?.title }}）吗？
-            <span class="text-(--ui-muted)">回滚会创建新版本，当前内容将保留在历史中。</span>
+            {{ t('history.revertConfirm', { tag, revision: revertTarget?.revision, title: revertTarget?.title }) }}
+            <span class="text-(--ui-muted)">{{ t('history.revertHint') }}</span>
           </p>
           <template #footer>
             <div class="flex justify-end gap-2">
-              <UButton variant="subtle" color="neutral" @click="revertOpen = false">取消</UButton>
+              <UButton variant="subtle" color="neutral" @click="revertOpen = false">{{ t('common.cancel') }}</UButton>
               <UButton icon="i-lucide-rotate-ccw" color="warning" :loading="reverting" @click="doRevert">
-                确认回滚
+                {{ t('history.confirmRevert') }}
               </UButton>
             </div>
           </template>
@@ -160,18 +160,16 @@ onMounted(async () => {
     <UModal v-model:open="deleteOpen" scrollable :ui="{ content: 'max-w-md max-h-[80vh]' }">
       <template #content>
         <UCard>
-          <template #header>确认删除修订</template>
+          <template #header>{{ t('history.confirmDeleteTitle') }}</template>
           <p class="text-sm text-(--ui-text)">
-            确定要删除 <span class="font-medium">{{ tag }}</span> 的修订
-            <span class="font-medium">r{{ deleteTarget?.revision }}</span>
-            （{{ deleteTarget?.title }}）吗？
-            <span class="text-(--ui-muted)">该修订将被永久移除，无法恢复。</span>
+            {{ t('history.deleteConfirm', { tag, revision: deleteTarget?.revision, title: deleteTarget?.title }) }}
+            <span class="text-(--ui-muted)">{{ t('history.deleteHint') }}</span>
           </p>
           <template #footer>
             <div class="flex justify-end gap-2">
-              <UButton variant="subtle" color="neutral" @click="deleteOpen = false">取消</UButton>
+              <UButton variant="subtle" color="neutral" @click="deleteOpen = false">{{ t('common.cancel') }}</UButton>
               <UButton icon="i-lucide-trash-2" color="error" :loading="deleting" @click="doDeleteRevision">
-                确认删除
+                {{ t('history.confirmDelete') }}
               </UButton>
             </div>
           </template>

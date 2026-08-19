@@ -66,6 +66,12 @@ final class Settings
         return self::get('home_tag', app_config()['site']['home_tag'] ?? 'HomePage');
     }
 
+    public static function siteLanguage(): string
+    {
+        $lang = self::get('language', app_config()['site']['language'] ?? 'zh-CN');
+        return in_array($lang, ['zh-CN', 'zh-TW', 'en'], true) ? $lang : 'zh-CN';
+    }
+
     public static function baseUrl(): string
     {
         $base = self::get('base_url', app_config()['site']['base_url'] ?? '');

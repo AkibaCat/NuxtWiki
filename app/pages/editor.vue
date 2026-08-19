@@ -7,10 +7,11 @@ const api = useApi()
 const { user, ready, site, init } = useAuth()
 const toast = useToast()
 const route = useRoute()
+const { t } = useI18n()
 
-// ==================== 权限（普通用户及以上可用） ====================
+// ==================== 权限 ====================
+// 注册用户（等级 1 管理员 / 2 高级 / 3 普通）可用；0 访客无权限
 const forbidden = ref(false)
-// 普通用户以上可用：注册用户等级均可用（1 管理员 / 2 高级用户 / 3 普通用户，0 访客不可用）
 const canUse = computed(() => [1, 2, 3].includes(user.value?.level ?? 0))
 
 // 工作区：打开的页面标签 + 当前激活标签
@@ -82,12 +83,13 @@ const siteName = computed(() => site.value?.name || 'NuxtWiki')
 const { setTitle } = useWikiTitle()
 const editorTitle = computed(() => {
   const base = siteName.value
-  if (!activeTab.value) return base + ' | 页面编辑器'
+  if (!activeTab.value) return `${base} | ${t('nav.editor')}`
   const tag = activeTab.value.tag
   // Home 为特殊页，括号内固定显示「首页」
   const isHome = tag === site.value?.home_tag || tag === 'Home' || tag === 'HomePage'
-  const displayTitle = isHome ? '首页' : (activeTab.value.title || tag)
-  return base + ' | 编辑[' + displayTitle + ']'
+  const displayTitle = isHome ? t('nav.home') : (activeTab.value.title || tag)
+  const suffix = isHome ? t('editor.title.home') : t('editor.title.withPage', { title: displayTitle })
+  return `${base} | ${suffix}`
 })
 watch(editorTitle, (v) => setTitle(v), { immediate: true })
 onUnmounted(() => setTitle(null))
@@ -167,7 +169,7 @@ const insert = (tag: string, before: string, after = '') => {
   const start = el?.selectionStart ?? val.length
   const end = el?.selectionEnd ?? val.length
   const hasSel = el ? start !== end : false
-  const content = hasSel ? val.slice(start, end) : after !== '' ? '文本' : ''
+  const content = hasSel ? val.slice(start, end) : after !== '' ? t('editor.placeholder.text') : ''
   if (tab) tab.body = val.slice(0, start) + before + content + after + val.slice(end)
   requestAnimationFrame(() => {
     const t = getTextarea(tag)
@@ -178,21 +180,21 @@ const insert = (tag: string, before: string, after = '') => {
   })
 }
 const tools = [
-  { label: '标题2', icon: 'i-lucide-heading-2', fn: (t: any) => t('## ') },
-  { label: '标题3', icon: 'i-lucide-heading-3', fn: (t: any) => t('### ') },
-  { label: '粗体', icon: 'i-lucide-bold', fn: (t: any) => t('**', '**') },
-  { label: '斜体', icon: 'i-lucide-italic', fn: (t: any) => t('*', '*') },
-  { label: '下划线', icon: 'i-lucide-underline', fn: (t: any) => t('__', '__') },
-  { label: '删除线', icon: 'i-lucide-strikethrough', fn: (t: any) => t('~~', '~~') },
-  { label: '等宽', icon: 'i-lucide-code', fn: (t: any) => t('`', '`') },
-  { label: '代码块', icon: 'i-lucide-code-xml', fn: (t: any) => t('```\n', '\n```') },
-  { label: '内链', icon: 'i-lucide-link', fn: (t: any) => t('[[显示名|页面名]]') },
-  { label: '外链', icon: 'i-lucide-globe', fn: (t: any) => t('[链接文字](https://example.com)') },
-  { label: '图片', icon: 'i-lucide-image', fn: (t: any) => t('![图片说明](https://example.com/image.png)') },
-  { label: '列表', icon: 'i-lucide-list', fn: (t: any) => t('- 项目\n') },
-  { label: '表格', icon: 'i-lucide-table', fn: (t: any) => t('| 表头1 | 表头2 |\n| --- | --- |\n| 内容1 | 内容2 |\n') },
-  { label: '引用', icon: 'i-lucide-quote', fn: (t: any) => t('> 引用内容\n') },
-  { label: '分隔线', icon: 'i-lucide-minus', fn: (t: any) => t('\n---\n') },
+  { label: 'editor.tools.h2', icon: 'i-lucide-heading-2', fn: (ins: any) => ins('## ') },
+  { label: 'editor.tools.h3', icon: 'i-lucide-heading-3', fn: (ins: any) => ins('### ') },
+  { label: 'editor.tools.bold', icon: 'i-lucide-bold', fn: (ins: any) => ins('**', '**') },
+  { label: 'editor.tools.italic', icon: 'i-lucide-italic', fn: (ins: any) => ins('*', '*') },
+  { label: 'editor.tools.underline', icon: 'i-lucide-underline', fn: (ins: any) => ins('__', '__') },
+  { label: 'editor.tools.strike', icon: 'i-lucide-strikethrough', fn: (ins: any) => ins('~~', '~~') },
+  { label: 'editor.tools.code', icon: 'i-lucide-code', fn: (ins: any) => ins('`', '`') },
+  { label: 'editor.tools.codeBlock', icon: 'i-lucide-code-xml', fn: (ins: any) => ins('```\n', '\n```') },
+  { label: 'editor.tools.link', icon: 'i-lucide-link', fn: (ins: any) => ins(`[[${t('editor.placeholder.linkDisplay')}|${t('editor.placeholder.linkPage')}]]`) },
+  { label: 'editor.tools.externalLink', icon: 'i-lucide-globe', fn: (ins: any) => ins(`[${t('editor.placeholder.linkText')}](${t('editor.placeholder.linkUrl')})`) },
+  { label: 'editor.tools.image', icon: 'i-lucide-image', fn: (ins: any) => ins(`![${t('editor.placeholder.imageAlt')}](${t('editor.placeholder.imageUrl')})`) },
+  { label: 'editor.tools.list', icon: 'i-lucide-list', fn: (ins: any) => ins(`- ${t('editor.placeholder.listItem')}\n`) },
+  { label: 'editor.tools.table', icon: 'i-lucide-table', fn: (ins: any) => ins(`| ${t('editor.placeholder.tableHeader1')} | ${t('editor.placeholder.tableHeader2')} |\n| --- | --- |\n| ${t('editor.placeholder.tableContent1')} | ${t('editor.placeholder.tableContent2')} |\n`) },
+  { label: 'editor.tools.quote', icon: 'i-lucide-quote', fn: (ins: any) => ins(`> ${t('editor.placeholder.quote')}\n`) },
+  { label: 'editor.tools.divider', icon: 'i-lucide-minus', fn: (ins: any) => ins('\n---\n') },
 ]
 
 // ==================== 保存 / 预览 ====================
@@ -204,7 +206,7 @@ const save = async () => {
   const tab = activeTab.value
   if (!tab) return
   if (!tab.title.trim()) {
-    toast.add({ title: '请填写标题', color: 'error' })
+    toast.add({ title: t('editor.titleRequired'), color: 'error' })
     return
   }
   saving.value = true
@@ -215,7 +217,7 @@ const save = async () => {
     savedTag.value = tab.tag
     saveModal.value = true
   } else {
-    toast.add({ title: r.error?.message || '保存失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('editor.saveFailed'), color: 'error' })
   }
 }
 const currentPreview = computed(() => {
@@ -233,14 +235,14 @@ const currentPreview = computed(() => {
   <div v-if="forbidden" class="flex min-h-80 flex-col items-center justify-center gap-4">
     <!-- 权限不足（低于普通用户）禁止访问 -->
     <UIcon name="i-lucide-shield-alert" class="size-10 text-(--ui-error)" />
-    <p class="text-(--ui-muted)">此功能仅普通用户及以上可用，请先登录。</p>
-    <UButton to="/" color="neutral" variant="subtle" label="返回首页" />
+    <p class="text-(--ui-muted)">{{ t('editor.noPermission') }}</p>
+    <UButton to="/" color="neutral" variant="subtle" :label="t('editor.backToHome')" />
   </div>
   <div v-else class="flex flex-col" style="height: calc(100dvh - 9rem)">
     <!-- 顶部一行：已打开页面标签 -->
     <div class="flex items-center gap-1 overflow-x-auto border-b border-(--ui-border) bg-(--ui-bg-elevated) px-2 py-1.5">
-      <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-open" label="打开页面" @click="openPicker" />
-      <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-file-plus-2" label="创建页面" @click="createModal = true" />
+      <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-open" :label="t('editor.openPage')" @click="openPicker" />
+      <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-file-plus-2" :label="t('editor.createPage')" @click="createModal = true" />
       <template v-if="tabs.length">
         <UButton
           v-for="tab in tabs"
@@ -259,8 +261,8 @@ const currentPreview = computed(() => {
     <!-- 未打开任何页面：提示 + 打开页面按钮 -->
     <div v-if="!tabs.length" class="flex flex-1 flex-col items-center justify-center gap-4">
       <UIcon name="i-lucide-file-edit" class="size-10 text-(--ui-muted)" />
-      <p class="text-(--ui-muted)">未打开任何页面编辑，请选择需要编辑的页面</p>
-      <UButton icon="i-lucide-folder-open" label="打开页面" @click="openPicker" />
+      <p class="text-(--ui-muted)">{{ t('editor.emptyWorkspace') }}</p>
+      <UButton icon="i-lucide-folder-open" :label="t('editor.openPage')" @click="openPicker" />
     </div>
 
     <!-- 编辑器主体 -->
@@ -268,12 +270,12 @@ const currentPreview = computed(() => {
       <!-- 工具栏一行：页面名 + 页面标题 -->
       <div class="flex items-center gap-3 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2">
         <span class="text-xs font-semibold text-(--ui-muted) shrink-0">{{ activeTag }}</span>
-        <UInput v-model="activeTab.title" size="sm" class="w-full" placeholder="页面标题" />
+        <UInput v-model="activeTab.title" size="sm" class="w-full" :placeholder="t('editor.pageTitle')" />
       </div>
       <!-- 工具栏二行：左快捷语法，右保存/预览 -->
       <div class="flex items-center justify-between gap-2 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-2 py-1.5">
         <div class="flex flex-wrap items-center gap-1">
-          <UTooltip v-for="tool in tools" :key="tool.label" :text="tool.label">
+          <UTooltip v-for="tool in tools" :key="tool.label" :text="t(tool.label)">
             <UButton :icon="tool.icon" size="xs" color="neutral" variant="subtle" @click="tool.fn((b: string, a = '') => insert(activeTag, b, a))" />
           </UTooltip>
         </div>
@@ -283,10 +285,10 @@ const currentPreview = computed(() => {
             color="neutral"
             variant="subtle"
             :icon="previewOn ? 'i-lucide-eye-off' : 'i-lucide-eye'"
-            :label="previewOn ? '关闭预览' : '预览'"
+            :label="previewOn ? t('editor.closePreview') : t('editor.preview')"
             @click="previewOn = !previewOn"
           />
-          <UButton size="sm" icon="i-lucide-save" :loading="saving" label="保存" @click="save" />
+          <UButton size="sm" icon="i-lucide-save" :loading="saving" :label="t('common.save')" @click="save" />
         </div>
       </div>
 
@@ -299,7 +301,7 @@ const currentPreview = computed(() => {
             :model-value="activeTab.body"
             :rows="24"
             height="100%"
-            placeholder="使用 Markdown 语法编写内容…"
+            :placeholder="t('editor.bodyPlaceholder')"
             :corner="previewOn ? 'bottom-left' : 'bottom'"
             class="min-h-0 flex-1"
             @update:model-value="(v: string) => { if (activeTab) activeTab.body = v }"
@@ -318,11 +320,11 @@ const currentPreview = computed(() => {
     <UModal v-model:open="saveModal">
       <template #content>
         <UCard>
-          <p class="py-6 text-center text-(--ui-text)">保存成功，是否返回页面查看</p>
+          <p class="py-6 text-center text-(--ui-text)">{{ t('editor.saved') }}</p>
           <template #footer>
             <div class="flex items-center justify-end gap-2">
-              <UButton variant="subtle" color="neutral" @click="saveModal = false">否</UButton>
-              <UButton label="是" @click="saveModal = false; navigateTo(`/${savedTag}`)" />
+              <UButton variant="subtle" color="neutral" @click="saveModal = false">{{ t('editor.savedNo') }}</UButton>
+              <UButton :label="t('editor.savedYes')" @click="saveModal = false; navigateTo(`/${savedTag}`)" />
             </div>
           </template>
         </UCard>
@@ -333,7 +335,7 @@ const currentPreview = computed(() => {
     <UModal v-model:open="openModal" scrollable :ui="{ content: 'max-w-4xl max-h-[85vh]' }">
       <template #content>
         <UCard>
-          <template #header>选择要编辑的页面</template>
+          <template #header>{{ t('editor.selectPage') }}</template>
           <div v-if="listLoading" class="flex justify-center py-10">
             <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-(--ui-primary)" />
           </div>
@@ -351,12 +353,12 @@ const currentPreview = computed(() => {
               <span class="truncate">{{ p.title }}</span>
             </UButton>
           </div>
-          <div v-else class="py-10 text-center text-(--ui-muted)">暂无页面</div>
+          <div v-else class="py-10 text-center text-(--ui-muted)">{{ t('editor.noPages') }}</div>
           <template #footer>
             <div class="flex items-center justify-end gap-2">
-              <UButton variant="subtle" color="neutral" @click="openModal = false">取消</UButton>
-              <UButton icon="i-lucide-folder-open" label="打开所选页面" :disabled="!selected.length" @click="confirmOpen">
-                确认
+              <UButton variant="subtle" color="neutral" @click="openModal = false">{{ t('common.cancel') }}</UButton>
+              <UButton icon="i-lucide-folder-open" :label="t('editor.openSelected')" :disabled="!selected.length" @click="confirmOpen">
+                {{ t('common.confirm') }}
               </UButton>
             </div>
           </template>
@@ -368,14 +370,14 @@ const currentPreview = computed(() => {
     <UModal v-model:open="createModal">
       <template #content>
         <UCard>
-          <template #header>创建新页面</template>
+          <template #header>{{ t('editor.createNewPage') }}</template>
           <form class="space-y-4" @submit.prevent="createPage">
-            <UFormField label="页面名" required>
-              <UInput v-model="newTag" placeholder="输入页面名（如 MyPage）" autofocus />
+            <UFormField :label="t('editor.newPageName')" required>
+              <UInput v-model="newTag" :placeholder="t('editor.newPagePlaceholder')" autofocus />
             </UFormField>
             <div class="flex items-center justify-end gap-2">
-              <UButton type="button" variant="subtle" color="neutral" @click="createModal = false">取消</UButton>
-              <UButton type="submit" icon="i-lucide-file-plus-2" label="创建" />
+              <UButton type="button" variant="subtle" color="neutral" @click="createModal = false">{{ t('common.cancel') }}</UButton>
+              <UButton type="submit" icon="i-lucide-file-plus-2" :label="t('common.create')" />
             </div>
           </form>
         </UCard>
@@ -383,3 +385,11 @@ const currentPreview = computed(() => {
     </UModal>
   </div>
 </template>
+
+<style scoped>
+/* 页面编辑器可点击按钮 hover 时显示点击（pointer）光标 */
+:deep(button:not(:disabled)),
+:deep(button:not(:disabled):hover) {
+  cursor: pointer;
+}
+</style>

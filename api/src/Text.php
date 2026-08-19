@@ -11,7 +11,6 @@ final class Text
     {
         $tag = trim($tag);
         $tag = str_replace(' ', '_', $tag);
-        // 保留 \p{L}\p{N} _ - . 以及中文等；其余转下划线
         $tag = preg_replace('/[^\p{L}\p{N}_\-\.]+/u', '_', $tag) ?? $tag;
         $tag = trim($tag, '_');
         return mb_substr($tag, 0, 191, 'UTF-8');

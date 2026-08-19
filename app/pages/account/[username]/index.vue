@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 页面职责：展示用户资料、简介、活跃图、贡献与订阅
+const { t } = useI18n()
 const route = useRoute()
 const { user, init } = useAuth()
 const api = useApi()
@@ -41,8 +43,8 @@ const onProfileSaved = async () => {
 const sectionTab = ref<'contrib' | 'watch'>('contrib')
 
 const socialDefs = [
-  { key: 'qq', label: 'QQ', icon: 'i-simple-icons-qq' },
-  { key: 'wechat', label: 'WeChat', icon: 'i-simple-icons-wechat' },
+  { key: 'qq', label: 'QQ', icon: 'i-simple-icons-qq', copyable: true },
+  { key: 'wechat', label: 'WeChat', icon: 'i-simple-icons-wechat', copyable: true },
   { key: 'bilibili', label: 'BiliBili', icon: 'i-simple-icons-bilibili' },
   { key: 'youtube', label: 'YouTube', icon: 'i-simple-icons-youtube' },
   { key: 'github', label: 'GitHub', icon: 'i-simple-icons-github' },
@@ -53,6 +55,33 @@ const visibleSocials = computed(() => {
   const s = profile.value?.socials || {}
   return socialDefs.filter((d) => s[d.key])
 })
+
+// 复制类社交项（QQ / WeChat）：点击复制其内容并提示
+const copySocial = async (key: string) => {
+  const value = String(profile.value?.socials?.[key] ?? '').trim()
+  if (!value) return
+  const label = socialDefs.find((d) => d.key === key)?.label || key
+  let ok = false
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      ok = true
+    }
+  } catch {
+    /* 走降级方案 */
+  }
+  if (!ok) {
+    const ta = document.createElement('textarea')
+    ta.value = value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { ok = document.execCommand('copy') } catch { ok = false }
+    document.body.removeChild(ta)
+  }
+  toast.add({ title: t('account.copiedSocial', { label, value }), color: 'success' })
+}
 
 onMounted(async () => {
   await init()
@@ -85,7 +114,7 @@ const unwatch = async (tag: string) => {
   const r = await api.post('watch.remove', { tag })
   if (r.ok) {
     watches.value = watches.value.filter((w) => w.tag !== tag)
-    toast.add({ title: '已取消订阅', color: 'success' })
+    toast.add({ title: t('account.unsubscribed'), color: 'success' })
   }
 }
 
@@ -162,7 +191,7 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
     <div v-else-if="notFound" class="text-center py-16">
       <UIcon name="i-lucide-user-x" class="size-12 text-(--ui-muted) mb-4" />
       <h1 class="text-2xl font-bold mb-2">{{ username }}</h1>
-      <p class="text-(--ui-muted)">该用户不存在。</p>
+      <p class="text-(--ui-muted)">{{ t('account.notFound') }}</p>
     </div>
 
     <template v-else-if="profile">
@@ -174,8 +203,8 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
       >
         <UIcon :name="isBanned ? 'i-lucide-ban' : 'i-lucide-snowflake'" class="size-5 mt-0.5 shrink-0" />
         <div class="min-w-0">
-          <p class="font-semibold">{{ isBanned ? '该账号已被封禁' : '该账号已被冻结' }}</p>
-          <p v-if="profile.reason" class="text-sm mt-1 break-words">原因：{{ profile.reason }}</p>
+          <p class="font-semibold">{{ isBanned ? t('account.banned') : t('account.frozen') }}</p>
+          <p v-if="profile.reason" class="text-sm mt-1 break-words">{{ t('account.reason') }}：{{ profile.reason }}</p>
         </div>
       </div>
 
@@ -184,7 +213,7 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
         <template v-if="isBanned">
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
-              <h1 class="text-2xl font-bold">违规账号</h1>
+              <h1 class="text-2xl font-bold">{{ t('account.violation') }}</h1>
               <span class="text-sm text-(--ui-muted)">@{{ profile.username }}</span>
             </div>
           </div>
@@ -201,15 +230,15 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
             <div class="flex items-center gap-2">
               <h1 class="text-2xl font-bold shrink-0">{{ profile.nickname || profile.username }}</h1>
               <!-- 权限标签（等级）位于昵称右边，粗描边样式 -->
-              <span v-if="profile.level" class="text-xs rounded-full border-2 border-(--ui-primary) text-(--ui-primary) px-2 py-0.5 shrink-0">{{ profile.level === 1 ? '管理员' : profile.level === 2 ? '高级用户' : '普通用户' }}</span>
+              <span v-if="profile.level" class="text-xs rounded-full border-2 border-(--ui-primary) text-(--ui-primary) px-2 py-0.5 shrink-0">{{ profile.level === 1 ? t('account.role.admin') : profile.level === 2 ? t('account.role.advanced') : t('account.role.user') }}</span>
               <!-- 编辑资料按钮：与昵称同行，固定在右侧 -->
               <UButton v-if="isSelf" icon="i-lucide-pencil" variant="subtle" class="ml-auto shrink-0" @click="editOpen = true">
-                编辑资料
+                {{ t('account.editProfile') }}
               </UButton>
             </div>
             <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
               <span class="text-sm text-(--ui-muted)">@{{ profile.username }}</span>
-              <span class="text-xs text-(--ui-muted)">加入于 {{ formatDate(profile.created_at) }}</span>
+              <span class="text-xs text-(--ui-muted)">{{ t('account.joinedAt') }} {{ formatDate(profile.created_at) }}</span>
             </div>
             <!-- 个人介绍显示在加入时间下方 -->
             <p v-if="profile.bio" class="text-sm text-(--ui-muted) mt-1 whitespace-pre-wrap break-words">{{ profile.bio }}</p>
@@ -219,28 +248,41 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
 
       <!-- 外部链接小卡片（显示在用户信息下方，封禁账号不显示） -->
       <div v-if="!isBanned && visibleSocials.length" class="mb-8">
-        <h2 class="font-semibold mb-3">社交链接</h2>
+        <h2 class="font-semibold mb-3">{{ t('account.socialLinks') }}</h2>
         <div class="flex flex-wrap gap-2">
-          <a
-            v-for="d in visibleSocials"
-            :key="d.key"
-            :href="profile.socials?.[d.key]"
-            target="_blank"
-            rel="noopener"
-            :title="profile.socials?.[d.key]"
-            class="inline-flex items-center gap-2 rounded-lg border border-(--ui-border) px-3 py-2 text-sm text-(--ui-text) hover:text-(--ui-primary) hover:border-(--ui-primary) no-underline"
-          >
-            <UIcon :name="d.icon" class="size-4 shrink-0" />
-            {{ d.label }}
-          </a>
+          <template v-for="d in visibleSocials" :key="d.key">
+            <!-- QQ / WeChat：点击复制其内容 -->
+            <button
+              v-if="d.copyable"
+              type="button"
+              :title="profile.socials?.[d.key]"
+              class="inline-flex items-center gap-2 rounded-lg border border-(--ui-border) px-3 py-2 text-sm text-(--ui-text) hover:text-(--ui-primary) hover:border-(--ui-primary) cursor-pointer"
+              @click="copySocial(d.key)"
+            >
+              <UIcon :name="d.icon" class="size-4 shrink-0" />
+              {{ d.label }}
+            </button>
+            <!-- 其他社交项：作为外链打开 -->
+            <a
+              v-else
+              :href="profile.socials?.[d.key]"
+              target="_blank"
+              rel="noopener"
+              :title="profile.socials?.[d.key]"
+              class="inline-flex items-center gap-2 rounded-lg border border-(--ui-border) px-3 py-2 text-sm text-(--ui-text) hover:text-(--ui-primary) hover:border-(--ui-primary) no-underline"
+            >
+              <UIcon :name="d.icon" class="size-4 shrink-0" />
+              {{ d.label }}
+            </a>
+          </template>
         </div>
       </div>
 
       <!-- 活跃图 -->
       <div class="rounded-lg border border-(--ui-border) p-4 mb-8">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="font-semibold">活跃图</h2>
-          <span class="text-sm text-(--ui-muted)">过去一年 {{ totalContributions }} 次编辑</span>
+          <h2 class="font-semibold">{{ t('account.activity') }}</h2>
+          <span class="text-sm text-(--ui-muted)">{{ t('account.lastYearEdits', { count: totalContributions }) }}</span>
         </div>
         <!-- 仅格子区域（含日期标记）可横向滚动，标题/图例固定 -->
         <div class="overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -264,7 +306,7 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
                     :key="cell.key"
                     class="block size-[9px] rounded-[1.5px]"
                     :style="{ backgroundColor: levelColor(cell.level) }"
-                    :title="`${cell.key} · ${cell.count} 次编辑`"
+                    :title="`${cell.key} · ${cell.count} ${t('account.editsUnit')}`"
                   />
                 </div>
               </div>
@@ -272,9 +314,9 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
           </div>
         </div>
         <div class="flex items-center justify-end gap-1 mt-2 text-[10px] text-(--ui-muted)">
-          <span>少</span>
+          <span>{{ t('account.activityLow') }}</span>
           <span v-for="l in [0, 1, 2, 3, 4]" :key="l" class="block size-[9px] rounded-[1.5px]" :style="{ backgroundColor: levelColor(l) }" />
-          <span>多</span>
+          <span>{{ t('account.activityHigh') }}</span>
         </div>
       </div>
 
@@ -285,48 +327,48 @@ const weekdayCell = (dayIndex: number) => ['', 'Mon', '', 'Wed', '', 'Fri', ''][
             size="sm"
             :variant="sectionTab === 'contrib' ? 'solid' : 'ghost'"
             @click="sectionTab = 'contrib'"
-          >贡献 ({{ contributions.length }})</UButton>
+          >{{ t('account.contribs') }} ({{ contributions.length }})</UButton>
           <UButton
             size="sm"
             :variant="sectionTab === 'watch' ? 'solid' : 'ghost'"
             @click="sectionTab = 'watch'"
-          >订阅 ({{ watches.length }})</UButton>
+          >{{ t('account.watches') }} ({{ watches.length }})</UButton>
         </div>
       </div>
 
       <div v-if="sectionTab === 'contrib' || !isSelf || isBanned">
-        <h2 class="text-lg font-semibold mb-3">{{ isSelf ? '我的贡献' : '贡献' }} ({{ contributions.length }})</h2>
+        <h2 class="text-lg font-semibold mb-3">{{ isSelf ? t('account.myContribs') : t('account.contribs') }} ({{ contributions.length }})</h2>
         <ul v-if="contributions.length" class="grid gap-3 sm:grid-cols-2">
           <li v-for="c in contributions" :key="c.tag" class="rounded-lg border border-(--ui-border) px-4 py-3">
             <div class="flex items-center gap-2">
               <NuxtLink :to="`/${c.tag}`" class="font-medium hover:text-(--ui-primary) truncate flex-1">
                 {{ c.title }}
               </NuxtLink>
-              <span class="text-xs text-(--ui-muted) shrink-0">{{ c.edits }} 次编辑</span>
+              <span class="text-xs text-(--ui-muted) shrink-0">{{ c.edits }} {{ t('account.editsUnit') }}</span>
             </div>
-            <p class="text-xs text-(--ui-muted) mt-0.5">最近更新 {{ formatDate(c.updated_at) }}</p>
+            <p class="text-xs text-(--ui-muted) mt-0.5">{{ t('account.updatedAt') }} {{ formatDate(c.updated_at) }}</p>
           </li>
         </ul>
         <p v-else class="text-sm text-(--ui-muted) py-8 text-center rounded-lg border border-(--ui-border)">
-          {{ isSelf ? '你还没有贡献过任何页面。去创建或编辑一个页面吧。' : '该用户还没有贡献过任何页面。' }}
+          {{ isSelf ? t('account.contribEmptySelf') : t('account.contribEmptyOther') }}
         </p>
       </div>
 
       <div v-else>
-        <h2 class="text-lg font-semibold mb-3">我订阅的页面 ({{ watches.length }})</h2>
+        <h2 class="text-lg font-semibold mb-3">{{ t('account.myWatches') }} ({{ watches.length }})</h2>
         <ul v-if="watches.length" class="grid gap-3 sm:grid-cols-2">
           <li v-for="w in watches" :key="w.tag" class="flex items-center gap-3 rounded-lg border border-(--ui-border) px-4 py-3">
             <NuxtLink :to="`/${w.tag}`" class="font-medium hover:text-(--ui-primary) flex-1 truncate">
               {{ w.title }}
             </NuxtLink>
-            <span class="text-xs text-(--ui-muted) shrink-0">订阅于 {{ formatDate(w.subscribed_at) }}</span>
+            <span class="text-xs text-(--ui-muted) shrink-0">{{ t('account.subscribedAt') }} {{ formatDate(w.subscribed_at) }}</span>
             <UButton icon="i-lucide-bell-off" size="xs" color="neutral" variant="ghost" @click="unwatch(w.tag)">
-              取消
+              {{ t('common.cancel') }}
             </UButton>
           </li>
         </ul>
         <p v-else class="text-sm text-(--ui-muted) py-8 text-center rounded-lg border border-(--ui-border)">
-          你还没有订阅任何页面。在页面详情页点击「订阅」即可接收更新通知。
+          {{ t('account.watchEmpty') }}
         </p>
       </div>
     </template>

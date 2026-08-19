@@ -39,6 +39,7 @@ final class Database
                     @mkdir($dir, 0777, true);
                 }
                 self::$pdo = new PDO('sqlite:' . $path, null, null, $options);
+                // SQLite：手动启用外键约束与 WAL 日志，保证数据完整性与并发读写
                 self::$pdo->exec('PRAGMA foreign_keys = ON');
                 self::$pdo->exec('PRAGMA journal_mode = WAL');
             }

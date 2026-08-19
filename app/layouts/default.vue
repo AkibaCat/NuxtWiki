@@ -1,9 +1,17 @@
 <script setup lang="ts">
+// 全局布局：顶部导航（桌面/移动端折叠）、移动端「此页目录」栏 + 返回顶部、正文主体与页脚。
+// 同时作为 <title> 的唯一来源，并通过事件委托处理代码块复制按钮点击。
 const { user, ready, site, registrationOpen, init, logout } = useAuth()
+const { t } = useI18n()
 const route = useRoute()
+const { override } = useWikiTitle()
 
-onMounted(() => {
-  init()
+// 站点显示语言：init 完成后按其默认语言设置 locale（无浏览器记忆时）
+const { applyDefault } = useWikiLocale()
+
+onMounted(async () => {
+  await init()
+  applyDefault()
   document.addEventListener('click', onDocClick)
 })
 onBeforeUnmount(() => {
@@ -12,18 +20,16 @@ onBeforeUnmount(() => {
 
 // ==================== 站点名称 + 页面标题（静态路由；动态标题由各页面在数据加载后覆盖） ====================
 const PAGE_TITLES: Record<string, string> = {
-  '/pages': '所有页面',
-  '/recent': '最近更改',
-  '/search': '搜索',
-  '/settings': '设置',
-  '/login': '登录',
-  '/register': '注册',
-  '/admin': '后台管理',
+  '/pages': 'nav.title.pages',
+  '/recent': 'nav.title.recent',
+  '/search': 'nav.title.search',
+  '/settings': 'nav.title.settings',
+  '/login': 'nav.title.login',
+  '/register': 'nav.title.register',
+  '/admin': 'nav.title.admin',
 }
 
 const siteName = computed(() => site.value?.name || 'NuxtWiki')
-
-const { override } = useWikiTitle()
 
 // 站点级主题设置：挂载时应用持久化的主色（暗亮由 useColorMode 独立处理）
 useThemeSettings()
@@ -45,10 +51,10 @@ const routeTitle = computed(() => {
   if (override.value) return override.value
 
   // 站点首页：站点名 + 首页
-  if (path === '/') return `${name} | 首页`
+  if (path === '/') return `${name} | ${t('nav.title.home')}`
 
   // 固定页面（/admin /login /search …）
-  if (PAGE_TITLES[path]) return `${name} | ${PAGE_TITLES[path]}`
+  if (PAGE_TITLES[path]) return `${name} | ${t(PAGE_TITLES[path])}`
 
   // 其余页面兜底为站点名
   return name
@@ -97,10 +103,10 @@ const onDocClick = async (e: Event) => {
   if (span) {
     if (ok) {
       // 复制成功：图标 + “已复制”字样（图标在左）
-      span.innerHTML = CHECK_ICON + '已复制'
+      span.innerHTML = CHECK_ICON + t('common.copied')
       btn.classList.add('copied')
     } else {
-      span.textContent = '复制失败'
+      span.textContent = t('common.copyFailed')
     }
     setTimeout(() => {
       span.innerHTML = old
@@ -112,17 +118,17 @@ const onDocClick = async (e: Event) => {
 const year = new Date().getFullYear()
 
 const navLinks = computed(() => [
-  { label: '首页', to: '/', icon: 'i-lucide-home' },
-  { label: '所有页面', to: '/pages', icon: 'i-lucide-files' },
-  { label: '最近更改', to: '/recent', icon: 'i-lucide-clock' },
-  ...([1, 2, 3].includes(user.value?.level ?? 0) ? [{ label: '页面编辑器', to: '/editor', icon: 'i-lucide-file-edit' }] : []),
+  { label: t('nav.home'), to: '/', icon: 'i-lucide-home' },
+  { label: t('nav.pages'), to: '/pages', icon: 'i-lucide-files' },
+  { label: t('nav.recent'), to: '/recent', icon: 'i-lucide-clock' },
+  ...([1, 2, 3].includes(user.value?.level ?? 0) ? [{ label: t('nav.editor'), to: '/editor', icon: 'i-lucide-file-edit' }] : []),
 ])
 
 const userMenu = computed(() => {
   const items: any[] = [
-    [{ label: user.value?.username || '我的账户', icon: 'i-lucide-user', to: `/account/${encodeURIComponent(user.value?.username || 'me')}`, color: 'primary' }],
+    [{ label: user.value?.username || t('nav.myAccount'), icon: 'i-lucide-user', to: `/account/${encodeURIComponent(user.value?.username || 'me')}`, color: 'primary' }],
     [{
-      label: '退出登录',
+      label: t('nav.logout'),
       icon: 'i-lucide-log-out',
       onSelect: async () => {
         await logout()
@@ -131,7 +137,7 @@ const userMenu = computed(() => {
     }]
   ]
   if (user.value?.is_admin) {
-    items[0].push({ label: '管理后台', icon: 'i-lucide-settings', to: '/admin' })
+    items[0].push({ label: t('nav.admin'), icon: 'i-lucide-settings', to: '/admin' })
   }
   return items
 })
@@ -166,17 +172,19 @@ const userMenu = computed(() => {
           <UButton
             to="/search"
             icon="i-lucide-search"
-            aria-label="搜索"
+            :aria-label="t('nav.search')"
             color="neutral"
             variant="ghost"
+            :class="{ 'text-(--ui-primary)': $route.path === '/search' }"
           />
         </div>
         <UButton
           to="/settings"
           icon="i-lucide-settings"
-          aria-label="设置"
+          :aria-label="t('nav.title.settings')"
           color="neutral"
           variant="ghost"
+          :class="{ 'text-(--ui-primary)': $route.path === '/settings' }"
         />
         <template v-if="ready">
           <template v-if="user">
@@ -189,10 +197,10 @@ const userMenu = computed(() => {
             </UDropdownMenu>
           </template>
           <template v-else>
-            <UButton to="/login" color="neutral" variant="ghost" label="登录" />
+            <UButton to="/login" color="neutral" variant="ghost" :label="t('nav.login')" />
             <!-- 注册按钮仅桌面端显示（sm 及以上），移动端导航栏不展示 -->
             <span v-if="registrationOpen" class="hidden sm:inline-flex">
-              <UButton to="/register" label="注册" />
+              <UButton to="/register" :label="t('nav.register')" />
             </span>
           </template>
         </template>
@@ -226,7 +234,7 @@ const userMenu = computed(() => {
           color="neutral"
           variant="ghost"
           size="sm"
-          label="此页目录"
+          :label="t('toc.title')"
           :icon="tocOpen ? 'i-lucide-chevron-down' : 'i-lucide-list'"
           :icon-last="true"
           :aria-expanded="tocOpen"
@@ -237,7 +245,7 @@ const userMenu = computed(() => {
           variant="ghost"
           size="sm"
           icon="i-lucide-arrow-up"
-          label="返回顶部"
+          :label="t('toc.backToTop')"
           @click="scrollTop"
         />
 
@@ -271,7 +279,7 @@ const userMenu = computed(() => {
       <template #left>
         <p v-if="site?.site_footer" class="text-sm text-(--ui-muted) whitespace-pre-line">{{ site.site_footer }}</p>
         <p v-else class="text-sm text-(--ui-muted)">
-          © {{ year }} {{ site?.name || 'NuxtWiki' }} · 基于 Nuxt UI 与 PHP/MySQL
+          © {{ year }} {{ site?.name || 'NuxtWiki' }} · {{ t('footer.builtWith') }}
         </p>
       </template>
       <template #right>
@@ -280,7 +288,7 @@ const userMenu = computed(() => {
           to="/api/index.php?r=feed.rss"
           target="_blank"
           icon="i-lucide-rss"
-          aria-label="RSS 订阅"
+          :aria-label="t('footer.rss')"
           color="neutral"
           variant="ghost"
         />
@@ -288,7 +296,7 @@ const userMenu = computed(() => {
           v-if="user?.is_admin"
           to="/admin"
           icon="i-lucide-settings"
-          aria-label="管理后台"
+          :aria-label="t('nav.admin')"
           color="neutral"
           variant="ghost"
         />

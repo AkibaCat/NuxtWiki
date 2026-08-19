@@ -1,6 +1,8 @@
 <script setup lang="ts">
+const { t } = useI18n()
 const api = useApi()
 
+// 全部页面索引：支持按首字母与关键词过滤
 const pages = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -12,11 +14,12 @@ onMounted(async () => {
   if (r.ok) {
     pages.value = (r.data as any[]) ?? []
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('pages.loadFailed')
   }
   loading.value = false
 })
 
+// 过滤：先按首字母，再按标题/tag 关键词做不区分大小写的模糊匹配
 const filtered = computed(() => {
   let list = pages.value
   if (letter.value) list = list.filter((p) => (p.tag as string).slice(0, 1).toUpperCase() === letter.value)
@@ -27,6 +30,7 @@ const filtered = computed(() => {
   return list
 })
 
+// 由所有页面 tag 首字母去重生成字母导航
 const letters = computed(() => {
   const set = new Set<string>()
   for (const p of pages.value) set.add((p.tag as string).slice(0, 1).toUpperCase())
@@ -37,15 +41,15 @@ const letters = computed(() => {
 <template>
   <div class="max-w-4xl mx-auto px-4 py-8">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-      <h1 class="text-2xl font-bold">全部页面</h1>
+      <h1 class="text-2xl font-bold">{{ t('pages.title') }}</h1>
       <div class="flex items-center gap-2">
-        <UInput v-model="q" icon="i-lucide-search" placeholder="筛选页面…" class="w-56" />
+        <UInput v-model="q" icon="i-lucide-search" :placeholder="t('pages.filterPlaceholder')" class="w-56" />
       </div>
     </div>
 
     <div class="flex flex-wrap gap-1.5 mb-6">
       <UButton size="xs" color="neutral" variant="ghost" :class="{ 'text-(--ui-primary)': letter === '' }" @click="letter = ''">
-        全部
+        {{ t('pages.all') }}
       </UButton>
       <UButton
         v-for="l in letters"
@@ -78,11 +82,11 @@ const letters = computed(() => {
           </div>
           <div class="text-right shrink-0">
             <p class="text-xs text-(--ui-muted)">{{ formatDate(p.updated_at) }}</p>
-            <p class="text-xs text-(--ui-muted)">{{ p.hits }} 次阅读</p>
+            <p class="text-xs text-(--ui-muted)">{{ t('pages.readCount', { hits: p.hits }) }}</p>
           </div>
         </NuxtLink>
       </div>
-      <p v-else class="text-center py-16 text-(--ui-muted)">没有匹配的页面</p>
+      <p v-else class="text-center py-16 text-(--ui-muted)">{{ t('pages.empty') }}</p>
     </div>
   </div>
 </template>

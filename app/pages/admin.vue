@@ -1,8 +1,10 @@
 <script setup lang="ts">
+const { t } = useI18n()
 const { user, ready, init } = useAuth()
 const api = useApi()
 const toast = useToast()
 
+// 后台管理页：概览统计 / 站点设置 / 注册码 / 页面 / 用户 / 备份与导入，仅管理员可访问
 const tab = ref('stats')
 const loading = ref(true)
 
@@ -13,13 +15,12 @@ onMounted(async () => {
     return
   }
   if (!user.value.is_admin) {
-    toast.add({ title: '需要管理员权限', color: 'error' })
+    toast.add({ title: t('admin.permDenied'), color: 'error' })
     await navigateTo('/')
     return
   }
   await loadStats()
   loading.value = false
-  // 版本更新自动检查（每天首次登录后台触发一次）
   await autoCheckVersion()
 })
 
@@ -43,7 +44,7 @@ const escapeHtml = (s: string) =>
 
 const releaseNotesHtml = computed(() => {
   const md = versionInfo.value?.release_notes || ''
-  if (!md) return '<p>暂无更新说明</p>'
+  if (!md) return `<p>${t('admin.noReleaseNotes')}</p>`
   return md
     .split('\n')
     .map((line: string) => {
@@ -62,19 +63,19 @@ const checkVersion = async (opts: { silent?: boolean; refresh?: boolean } = {}) 
   const r = await api.get('admin.version-check', { refresh: opts.refresh ? 1 : undefined })
   versionChecking.value = false
   if (!r.ok) {
-    if (!opts.silent) toast.add({ title: r.error?.message || '检查更新失败，请稍后重试', color: 'error' })
+    if (!opts.silent) toast.add({ title: r.error?.message || t('admin.checkUpdateFail'), color: 'error' })
     return
   }
   versionInfo.value = r.data
   if (r.data?.has_update) {
     // 检测到新版本：弹出可点击查看的消息提示
     toast.add({
-      title: '检测到新版本，点击查看',
+      title: t('admin.updateAvailable'),
       color: 'primary',
-      actions: [{ label: '查看', onClick: () => { versionModalOpen.value = true } }]
+      actions: [{ label: t('admin.view'), onClick: () => { versionModalOpen.value = true } }]
     })
   } else if (!opts.silent) {
-    toast.add({ title: '已是最新版本', color: 'success' })
+    toast.add({ title: t('admin.upToDate'), color: 'success' })
   }
 }
 
@@ -108,7 +109,7 @@ const saveSettings = async () => {
   const r = await api.post('admin.settings', settings.value)
   settingsBusy.value = false
   if (r.ok) {
-    toast.add({ title: '设置已保存', color: 'success' })
+    toast.add({ title: t('admin.saved'), color: 'success' })
     const auth = useAuth()
     if (auth.site.value) {
       auth.site.value.name = settings.value.site_name
@@ -117,7 +118,7 @@ const saveSettings = async () => {
       auth.site.value.site_footer = settings.value.site_footer
     }
   } else {
-    toast.add({ title: r.error?.message || '保存失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.saveFail'), color: 'error' })
   }
 }
 
@@ -131,33 +132,33 @@ const loadAdminPages = async () => {
   pagesLoading.value = false
 }
 const deletePage = async (tag: string) => {
-  if (!confirm(`确定要删除页面「${tag}」及其所有修订记录吗？此操作不可撤销。`)) return
+  if (!confirm(t('admin.confirmDeletePage', { tag }))) return
   const r = await api.post('page.delete', { tag })
   if (r.ok) {
-    toast.add({ title: '页面已删除', color: 'success' })
+    toast.add({ title: t('admin.pageDeleted'), color: 'success' })
     await loadAdminPages()
     await loadStats()
   } else {
-    toast.add({ title: r.error?.message || '删除失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.deletePageFail'), color: 'error' })
   }
 }
 
 // ============ 页面权限设置弹窗 ============
 // 页面权限等级选项（0 访客 / 1 管理员 / 2 高级 / 3 普通）
 const aclLevelOptions = [
-  { label: '访客（未登录）', value: 0 },
-  { label: '管理员', value: 1 },
-  { label: '高级用户', value: 2 },
-  { label: '普通用户', value: 3 }
+  { label: t('admin.role.guest'), value: 0 },
+  { label: t('admin.role.admin'), value: 1 },
+  { label: t('admin.role.advanced'), value: 2 },
+  { label: t('admin.role.user'), value: 3 }
 ]
 const permDefs = [
-  { key: 'read', label: '阅读权限', icon: 'i-lucide-eye', hint: '谁可以阅读本页面', def: 0 },
-  { key: 'edit', label: '编辑权限', icon: 'i-lucide-pencil', hint: '谁可以编辑本页面', def: 3 },
-  { key: 'history', label: '历史权限', icon: 'i-lucide-history', hint: '谁可以查看修订历史', def: 3 },
-  { key: 'diff', label: '对比权限', icon: 'i-lucide-git-compare', hint: '谁可以对比版本差异', def: 2 },
-  { key: 'backlinks', label: '回链权限', icon: 'i-lucide-link', hint: '谁可以查看反向链接', def: 3 },
-  { key: 'acl', label: '权限管理', icon: 'i-lucide-shield', hint: '谁可以修改本页权限', def: 1 },
-  { key: 'contributors', label: '贡献者', icon: 'i-lucide-users', hint: '谁可以查看贡献者列表', def: 0 }
+  { key: 'read', label: t('admin.perm.read'), icon: 'i-lucide-eye', hint: t('admin.perm.readHint'), def: 0 },
+  { key: 'edit', label: t('admin.perm.edit'), icon: 'i-lucide-pencil', hint: t('admin.perm.editHint'), def: 3 },
+  { key: 'history', label: t('admin.perm.history'), icon: 'i-lucide-history', hint: t('admin.perm.historyHint'), def: 3 },
+  { key: 'diff', label: t('admin.perm.diff'), icon: 'i-lucide-git-compare', hint: t('admin.perm.diffHint'), def: 2 },
+  { key: 'backlinks', label: t('admin.perm.backlinks'), icon: 'i-lucide-link', hint: t('admin.perm.backlinksHint'), def: 3 },
+  { key: 'acl', label: t('admin.perm.acl'), icon: 'i-lucide-shield', hint: t('admin.perm.aclHint'), def: 1 },
+  { key: 'contributors', label: t('admin.perm.contributors'), icon: 'i-lucide-users', hint: t('admin.perm.contributorsHint'), def: 0 }
 ]
 const aclModalOpen = ref(false)
 const aclTarget = ref<any>(null)
@@ -175,7 +176,7 @@ const openAclModal = async (row: any) => {
       aclPerms[p.key] = v >= 0 && v <= 3 ? v : p.def
     }
   } else {
-    toast.add({ title: r.error?.message || '加载权限失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.loadPermFail'), color: 'error' })
   }
   aclModalOpen.value = true
 }
@@ -187,10 +188,10 @@ const saveAcl = async () => {
   const r = await api.post('page.update-acl', payload)
   aclSaving.value = false
   if (r.ok) {
-    toast.add({ title: '权限已更新', color: 'success' })
+    toast.add({ title: t('admin.permsUpdated'), color: 'success' })
     aclModalOpen.value = false
   } else {
-    toast.add({ title: r.error?.message || '保存失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.saveFail'), color: 'error' })
   }
 }
 
@@ -204,16 +205,16 @@ const userBusy = ref(false)
 
 // 用户等级选项（账号权限下拉框：管理/高级/普通）
 const levelOptions = [
-  { label: '管理员', value: 1 },
-  { label: '高级用户', value: 2 },
-  { label: '普通用户', value: 3 }
+  { label: t('admin.role.admin'), value: 1 },
+  { label: t('admin.role.advanced'), value: 2 },
+  { label: t('admin.role.user'), value: 3 }
 ]
 // 站点默认权限等级（后端以字符串存储 0~3，含访客等级）
 const settingsLevelOptions = [
-  { label: '访客（未登录）', value: '0' },
-  { label: '管理员', value: '1' },
-  { label: '高级用户', value: '2' },
-  { label: '普通用户', value: '3' }
+  { label: t('admin.role.guest'), value: '0' },
+  { label: t('admin.role.admin'), value: '1' },
+  { label: t('admin.role.advanced'), value: '2' },
+  { label: t('admin.role.user'), value: '3' }
 ]
 
 const loadUsers = async () => {
@@ -227,12 +228,12 @@ const createUser = async () => {
   const r = await api.post('users.create', newUser.value)
   userBusy.value = false
   if (r.ok) {
-    toast.add({ title: '用户已创建', color: 'success' })
+    toast.add({ title: t('admin.userCreated'), color: 'success' })
     newUser.value = { username: '', password: '', level: 3 }
     showCreate.value = false
     await loadUsers()
   } else {
-    toast.add({ title: r.error?.message || '创建失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.createUserFail'), color: 'error' })
   }
 }
 // 设置权限等级（管理/高级/普通）——后端会同步恢复为正常状态
@@ -242,19 +243,20 @@ const setRoleLevel = async (u: any, level: number) => {
     u.level = level
     u.status = 'active'
     u.reason = ''
-    toast.add({ title: `已将「${u.username}」设为${level === 1 ? '管理员' : level === 2 ? '高级用户' : '普通用户'}`, color: 'success' })
+    const role = level === 1 ? t('admin.role.admin') : level === 2 ? t('admin.role.advanced') : t('admin.role.user')
+    toast.add({ title: t('admin.roleChanged', { name: u.username, role }), color: 'success' })
   } else {
-    toast.add({ title: r.error?.message || '更新失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.updateUserFail'), color: 'error' })
   }
 }
 const deleteUser = async (u: any) => {
-  if (!confirm(`确定要删除用户「${u.username}」吗？`)) return
+  if (!confirm(t('admin.confirmDeleteUser', { name: u.username }))) return
   const r = await api.post('users.delete', { username: u.username })
   if (r.ok) {
-    toast.add({ title: '用户已删除', color: 'success' })
+    toast.add({ title: t('admin.userDeleted'), color: 'success' })
     await loadUsers()
   } else {
-    toast.add({ title: r.error?.message || '删除失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.deleteUserFail'), color: 'error' })
   }
 }
 const setUserStatus = async (u: any, status: 'active' | 'frozen' | 'banned', reason = '') => {
@@ -262,9 +264,10 @@ const setUserStatus = async (u: any, status: 'active' | 'frozen' | 'banned', rea
   if (r.ok) {
     u.status = status
     u.reason = r.data?.reason || ''
-    toast.add({ title: `已${status === 'active' ? '恢复正常' : status === 'frozen' ? '冻结' : '封禁'}用户「${u.username}」`, color: 'success' })
+    const action = status === 'active' ? t('admin.status.restored') : status === 'frozen' ? t('admin.status.frozen') : t('admin.status.banned')
+    toast.add({ title: t('admin.userStatusChanged', { action, name: u.username }), color: 'success' })
   } else {
-    toast.add({ title: r.error?.message || '操作失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.opFail'), color: 'error' })
   }
 }
 
@@ -306,29 +309,29 @@ const generateRegcodes = async () => {
   const r = await api.post('regcode.generate', { count: regcodeCount.value })
   regcodeBusy.value = false
   if (r.ok) {
-    toast.add({ title: `已生成 ${regcodeCount.value} 个注册码`, color: 'success' })
+    toast.add({ title: t('admin.regcodesGenerated', { count: regcodeCount.value }), color: 'success' })
     await loadRegcodes()
   } else {
-    toast.add({ title: r.error?.message || '生成失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('admin.genRegcodesFail'), color: 'error' })
   }
 }
 const copyRegcode = async (code: string) => {
   await navigator.clipboard.writeText(code)
-  toast.add({ title: '已复制到剪贴板', color: 'success' })
+  toast.add({ title: t('admin.copiedToClipboard'), color: 'success' })
 }
 const deleteRegcode = async (id: number) => {
-  if (!confirm('确定要删除此注册码吗？')) return
+  if (!confirm(t('admin.confirmDeleteRegcode'))) return
   const r = await api.post('regcode.delete', { id })
   if (r.ok) {
-    toast.add({ title: '注册码已删除', color: 'success' })
+    toast.add({ title: t('admin.regcodeDeleted'), color: 'success' })
     await loadRegcodes()
   }
 }
 const destroyRegcode = async (id: number) => {
-  if (!confirm('确定要销毁此未使用的注册码吗？')) return
+  if (!confirm(t('admin.confirmDestroyRegcode'))) return
   const r = await api.post('regcode.destroy', { id })
   if (r.ok) {
-    toast.add({ title: '注册码已销毁', color: 'success' })
+    toast.add({ title: t('admin.regcodeDestroyed'), color: 'success' })
     await loadRegcodes()
   }
 }
@@ -347,10 +350,10 @@ const onImportFileChange = (e: Event) => {
 }
 const importBackup = async () => {
   if (!importFile.value) {
-    toast.add({ title: '请先选择备份文件', color: 'warning' })
+    toast.add({ title: t('admin.selectBackupFile'), color: 'warning' })
     return
   }
-  if (!confirm('导入将覆盖备份中包含的现有数据（页面/修订/用户等），此操作不可撤销，确定继续吗？')) return
+  if (!confirm(t('admin.confirmImport'))) return
   importBusy.value = true
   try {
     const text = await importFile.value.text()
@@ -358,12 +361,19 @@ const importBackup = async () => {
     if (r.ok) {
       const counts = (r.data as any)?.imported || {}
       toast.add({
-        title: `导入成功：页面 ${counts.pages ?? 0}、修订 ${counts.revisions ?? 0}、用户 ${counts.users ?? 0}、订阅 ${counts.watchers ?? 0}、注册码 ${counts.regcodes ?? 0}、设置 ${counts.settings ?? 0}`,
+        title: t('admin.importSuccess', {
+          pages: counts.pages ?? 0,
+          revisions: counts.revisions ?? 0,
+          users: counts.users ?? 0,
+          watchers: counts.watchers ?? 0,
+          regcodes: counts.regcodes ?? 0,
+          settings: counts.settings ?? 0
+        }),
         color: 'success'
       })
       await loadStats()
     } else {
-      toast.add({ title: r.error?.message || '导入失败', color: 'error' })
+      toast.add({ title: r.error?.message || t('admin.importFail'), color: 'error' })
     }
   } finally {
     importBusy.value = false
@@ -381,27 +391,27 @@ const statCards = computed(() => {
   const s = stats.value
   if (!s) return []
   return [
-    { label: '页面', value: s.pages, icon: 'i-lucide-file-text' },
-    { label: '修订', value: s.revisions, icon: 'i-lucide-history' },
-    { label: '用户', value: s.users, icon: 'i-lucide-users' },
-    { label: '订阅', value: s.watchers, icon: 'i-lucide-bell-ring' },
-    { label: '注册码', value: s.regcodes, icon: 'i-lucide-key-round' },
-    { label: '总阅读', value: s.total_hits, icon: 'i-lucide-eye' }
+    { label: t('admin.stats.pages'), value: s.pages, icon: 'i-lucide-file-text' },
+    { label: t('admin.stats.revisions'), value: s.revisions, icon: 'i-lucide-history' },
+    { label: t('admin.stats.users'), value: s.users, icon: 'i-lucide-users' },
+    { label: t('admin.stats.watchers'), value: s.watchers, icon: 'i-lucide-bell-ring' },
+    { label: t('admin.stats.regcodes'), value: s.regcodes, icon: 'i-lucide-key-round' },
+    { label: t('admin.stats.totalHits'), value: s.total_hits, icon: 'i-lucide-eye' }
   ]
 })
 </script>
 
 <template>
   <div class="max-w-5xl mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold mb-6">管理后台</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('admin.title') }}</h1>
 
     <!-- 版本更新横幅：检测到新版本时显示 -->
     <div v-if="versionInfo?.has_update" class="mb-6 flex items-center justify-between gap-3 rounded-lg border border-(--ui-primary) bg-(--ui-primary)/10 px-4 py-3">
       <div class="flex items-center gap-2 text-sm">
         <UIcon name="i-lucide-sparkles" class="size-4 shrink-0 text-(--ui-primary)" />
-        <span>检测到新版本：<span class="font-medium text-white">{{ versionInfo.current_version }}</span><span class="text-(--ui-muted)"> → </span><span class="font-semibold text-green-500">{{ versionInfo.latest_version }}</span></span>
+        <span>{{ t('admin.updateBanner') }}：<span class="font-medium text-white">{{ versionInfo.current_version }}</span><span class="text-(--ui-muted)"> → </span><span class="font-semibold text-green-500">{{ versionInfo.latest_version }}</span></span>
       </div>
-      <UButton size="sm" color="primary" icon="i-lucide-eye" @click="versionModalOpen = true">查看新版本</UButton>
+      <UButton size="sm" color="primary" icon="i-lucide-eye" @click="versionModalOpen = true">{{ t('admin.viewNewVersion') }}</UButton>
     </div>
 
     <div v-if="loading" class="flex justify-center py-16">
@@ -412,12 +422,12 @@ const statCards = computed(() => {
         v-model="tab"
         :ui="{ trigger: 'justify-center' }"
         :items="[
-          { label: '概览', value: 'stats', slot: 'stats', icon: 'i-lucide-layout-dashboard' },
-          { label: '站点设置', value: 'settings', slot: 'settings', icon: 'i-lucide-settings' },
-          { label: '注册码', value: 'regcodes', slot: 'regcodes', icon: 'i-lucide-key-round' },
-          { label: '页面管理', value: 'pages', slot: 'pages', icon: 'i-lucide-file-text' },
-          { label: '用户管理', value: 'users', slot: 'users', icon: 'i-lucide-users' },
-          { label: '备份', value: 'backup', slot: 'backup', icon: 'i-lucide-database-backup' }
+          { label: t('admin.tabs.stats'), value: 'stats', slot: 'stats', icon: 'i-lucide-layout-dashboard' },
+          { label: t('admin.tabs.settings'), value: 'settings', slot: 'settings', icon: 'i-lucide-settings' },
+          { label: t('admin.tabs.regcodes'), value: 'regcodes', slot: 'regcodes', icon: 'i-lucide-key-round' },
+          { label: t('admin.tabs.pages'), value: 'pages', slot: 'pages', icon: 'i-lucide-file-text' },
+          { label: t('admin.tabs.users'), value: 'users', slot: 'users', icon: 'i-lucide-users' },
+          { label: t('admin.tabs.backup'), value: 'backup', slot: 'backup', icon: 'i-lucide-database-backup' }
         ]"
       >
         <!-- 宽度不足时仅显示图标，不显示文字（md 及以上才显示文字，6 个标签需要约 700px） -->
@@ -439,9 +449,9 @@ const statCards = computed(() => {
             </UCard>
           </div>
           <div v-if="stats" class="mt-6 flex flex-wrap items-center gap-4 text-sm text-(--ui-muted)">
-            <span>数据库：{{ stats.driver }}</span>
+            <span>{{ t('admin.database') }}：{{ stats.driver }}</span>
             <span class="flex items-center gap-2">
-              <span>版本：{{ currentVersion }}</span>
+              <span>{{ t('admin.version') }}：{{ currentVersion }}</span>
               <UButton
                 size="xs"
                 variant="ghost"
@@ -449,7 +459,7 @@ const statCards = computed(() => {
                 icon="i-lucide-refresh-cw"
                 :loading="versionChecking"
                 @click="checkVersion({ refresh: true })"
-              >检查更新</UButton>
+              >{{ t('admin.checkUpdate') }}</UButton>
             </span>
           </div>
         </template>
@@ -458,48 +468,48 @@ const statCards = computed(() => {
           <UCard class="mt-4">
             <div class="space-y-4">
               <div class="grid md:grid-cols-2 gap-4">
-                <UFormField label="站点名称">
+                <UFormField :label="t('admin.settings.siteName')">
                   <UInput v-model="settings.site_name" class="w-full" />
                 </UFormField>
-                <UFormField label="首页页面名">
+                <UFormField :label="t('admin.settings.homeTag')">
                   <UInput v-model="settings.home_tag" class="w-full" />
                 </UFormField>
               </div>
-              <UFormField label="站点描述">
+              <UFormField :label="t('admin.settings.siteDescription')">
                 <UTextarea v-model="settings.site_description" :rows="2" class="w-full" />
               </UFormField>
-              <UFormField label="页脚内容" hint="显示在网站底部，可换行，留空则显示默认页脚">
+              <UFormField :label="t('admin.settings.footerContent')" :hint="t('admin.settings.footerHint')">
                 <UTextarea v-model="settings.site_footer" :rows="3" class="w-full" />
               </UFormField>
               <div class="grid md:grid-cols-2 gap-4">
-                <UFormField label="默认阅读权限等级">
+                <UFormField :label="t('admin.settings.defaultReadLevel')">
                   <USelect v-model="settings.default_read_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
-                <UFormField label="默认编辑权限等级">
+                <UFormField :label="t('admin.settings.defaultEditLevel')">
                   <USelect v-model="settings.default_edit_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
-                <UFormField label="默认历史权限等级">
+                <UFormField :label="t('admin.settings.defaultHistoryLevel')">
                   <USelect v-model="settings.default_history_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
-                <UFormField label="默认对比权限等级">
+                <UFormField :label="t('admin.settings.defaultDiffLevel')">
                   <USelect v-model="settings.default_diff_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
-                <UFormField label="默认回链权限等级">
+                <UFormField :label="t('admin.settings.defaultBacklinksLevel')">
                   <USelect v-model="settings.default_backlinks_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
-                <UFormField label="默认权限管理等级">
+                <UFormField :label="t('admin.settings.defaultPermsLevel')">
                   <USelect v-model="settings.default_perms_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
-                <UFormField label="默认贡献者等级">
+                <UFormField :label="t('admin.settings.defaultContributorsLevel')">
                   <USelect v-model="settings.default_contributors_level" :items="settingsLevelOptions" class="w-full" />
                 </UFormField>
               </div>
-              <UFormField label="开放注册">
+              <UFormField :label="t('admin.settings.allowRegistration')">
                 <USwitch v-model="allowRegistration" />
               </UFormField>
             </div>
             <template #footer>
-              <UButton icon="i-lucide-save" :loading="settingsBusy" @click="saveSettings">保存设置</UButton>
+              <UButton icon="i-lucide-save" :loading="settingsBusy" @click="saveSettings">{{ t('admin.saveSettings') }}</UButton>
             </template>
           </UCard>
         </template>
@@ -507,10 +517,10 @@ const statCards = computed(() => {
         <!-- 注册码管理 -->
         <template #regcodes>
           <div class="flex items-center justify-between mt-4 mb-3">
-            <h2 class="font-semibold">注册码列表 ({{ regcodes.length }})</h2>
+            <h2 class="font-semibold">{{ t('admin.regcodesList') }} ({{ regcodes.length }})</h2>
             <div class="flex items-center gap-2">
               <UInputNumber v-model="regcodeCount" :min="1" :max="100" class="w-20" />
-              <UButton icon="i-lucide-plus" :loading="regcodeBusy" @click="generateRegcodes">生成</UButton>
+              <UButton icon="i-lucide-plus" :loading="regcodeBusy" @click="generateRegcodes">{{ t('admin.generate') }}</UButton>
             </div>
           </div>
           <UCard :ui="{ body: 'p-0' }">
@@ -518,10 +528,10 @@ const statCards = computed(() => {
               :data="regcodes"
               :loading="regcodesLoading"
               :columns="[
-                { accessorKey: 'code', header: '注册码' },
-                { accessorKey: 'created_at', header: '生成时间' },
-                { accessorKey: 'username', header: '使用用户' },
-                { accessorKey: 'actions', header: '操作', enableSorting: false }
+                { accessorKey: 'code', header: t('admin.regcodes.code') },
+                { accessorKey: 'created_at', header: t('admin.regcodes.createdAt') },
+                { accessorKey: 'username', header: t('admin.regcodes.user') },
+                { accessorKey: 'actions', header: t('admin.regcodes.actions'), enableSorting: false }
               ]"
             >
               <template #created_at-cell="{ row }">
@@ -533,9 +543,9 @@ const statCards = computed(() => {
               </template>
               <template #actions-cell="{ row }">
                 <div class="flex items-center gap-1">
-                  <UButton v-if="!row.original.username" icon="i-lucide-copy" size="xs" color="neutral" variant="ghost" aria-label="复制" @click="copyRegcode(row.original.code)" />
-                  <UButton v-if="!row.original.username" icon="i-lucide-flame" size="xs" color="neutral" variant="ghost" aria-label="销毁" @click="destroyRegcode(row.original.id)" />
-                  <UButton v-if="row.original.username" icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" aria-label="删除" @click="deleteRegcode(row.original.id)" />
+                  <UButton v-if="!row.original.username" icon="i-lucide-copy" size="xs" color="neutral" variant="ghost" :aria-label="t('admin.copy')" @click="copyRegcode(row.original.code)" />
+                  <UButton v-if="!row.original.username" icon="i-lucide-flame" size="xs" color="neutral" variant="ghost" :aria-label="t('admin.destroy')" @click="destroyRegcode(row.original.id)" />
+                  <UButton v-if="row.original.username" icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" :aria-label="t('common.delete')" @click="deleteRegcode(row.original.id)" />
                 </div>
               </template>
             </UTable>
@@ -548,13 +558,13 @@ const statCards = computed(() => {
               :data="adminPages"
               :loading="pagesLoading"
               :columns="[
-                { accessorKey: 'title', header: '标题' },
-                { accessorKey: 'tag', header: '页面名' },
-                { accessorKey: 'revision', header: '修订' },
-                { accessorKey: 'hits', header: '阅读' },
-                { accessorKey: 'last_editor', header: '编辑者' },
-                { accessorKey: 'updated_at', header: '更新' },
-                { accessorKey: 'actions', header: '操作', enableSorting: false }
+                { accessorKey: 'title', header: t('admin.pages.title') },
+                { accessorKey: 'tag', header: t('admin.pages.tag') },
+                { accessorKey: 'revision', header: t('admin.pages.revision') },
+                { accessorKey: 'hits', header: t('admin.pages.hits') },
+                { accessorKey: 'last_editor', header: t('admin.pages.editor') },
+                { accessorKey: 'updated_at', header: t('admin.pages.updated') },
+                { accessorKey: 'actions', header: t('admin.pages.actions'), enableSorting: false }
               ]"
             >
               <template #title-cell="{ row }">
@@ -567,9 +577,9 @@ const statCards = computed(() => {
               </template>
               <template #actions-cell="{ row }">
                 <div class="flex items-center gap-1">
-                  <UButton icon="i-lucide-shield" size="xs" color="neutral" variant="ghost" aria-label="权限设置" @click="openAclModal(row.original)" />
-                  <UButton :to="`/editor?open=${encodeURIComponent(row.original.tag)}`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" aria-label="编辑" />
-                  <UButton icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" aria-label="删除" @click="deletePage(row.original.tag)" />
+                  <UButton icon="i-lucide-shield" size="xs" color="neutral" variant="ghost" :aria-label="t('admin.perm.title')" @click="openAclModal(row.original)" />
+                  <UButton :to="`/editor?open=${encodeURIComponent(row.original.tag)}`" icon="i-lucide-pencil" size="xs" color="neutral" variant="ghost" :aria-label="t('common.edit')" />
+                  <UButton icon="i-lucide-trash" size="xs" color="neutral" variant="ghost" :aria-label="t('common.delete')" @click="deletePage(row.original.tag)" />
                 </div>
               </template>
             </UTable>
@@ -578,7 +588,7 @@ const statCards = computed(() => {
           <UModal v-model:open="aclModalOpen">
             <template #content>
               <UCard>
-                <template #header>权限设置 · {{ aclTarget?.tag }}</template>
+                <template #header>{{ t('admin.perm.title') }} · {{ aclTarget?.tag }}</template>
                 <div class="space-y-4">
                   <UFormField
                     v-for="p in permDefs"
@@ -592,14 +602,14 @@ const statCards = computed(() => {
                     color="info"
                     variant="subtle"
                     icon="i-lucide-info"
-                    title="权限等级说明"
-                    description="等级数字越小代表越宽松：0 = 访客（未登录），1 = 管理员，2 = 高级用户，3 = 普通用户。选中某项即代表该等级及更高级的用户可执行此操作（管理员拥有最高权限）。"
+                    :title="t('admin.aclLevelTitle')"
+                    :description="t('admin.aclLevelDesc')"
                   />
                 </div>
                 <template #footer>
                   <div class="flex justify-end gap-2">
-                    <UButton variant="subtle" color="neutral" @click="aclModalOpen = false">取消</UButton>
-                    <UButton icon="i-lucide-save" :loading="aclSaving" @click="saveAcl">保存权限</UButton>
+                    <UButton variant="subtle" color="neutral" @click="aclModalOpen = false">{{ t('common.cancel') }}</UButton>
+                    <UButton icon="i-lucide-save" :loading="aclSaving" @click="saveAcl">{{ t('admin.savePerms') }}</UButton>
                   </div>
                 </template>
               </UCard>
@@ -609,27 +619,27 @@ const statCards = computed(() => {
 
         <template #users>
           <div class="flex items-center justify-between mt-4 mb-3 gap-3">
-            <h2 class="font-semibold shrink-0">用户列表 ({{ users.length }})</h2>
+            <h2 class="font-semibold shrink-0">{{ t('admin.usersList') }} ({{ users.length }})</h2>
             <div class="flex items-center gap-2 ml-auto">
-              <UInput v-model="userSearch" placeholder="按用户名搜索…" icon="i-lucide-search" class="w-56" clearable @update:model-value="loadUsers" />
-              <UButton v-if="!showCreate" icon="i-lucide-user-plus" size="sm" @click="showCreate = true">新建用户</UButton>
+              <UInput v-model="userSearch" :placeholder="t('admin.searchUsersPlaceholder')" icon="i-lucide-search" class="w-56" clearable @update:model-value="loadUsers" />
+              <UButton v-if="!showCreate" icon="i-lucide-user-plus" size="sm" @click="showCreate = true">{{ t('admin.createUser') }}</UButton>
             </div>
           </div>
           <UCard v-if="showCreate" class="mb-4">
             <div class="grid md:grid-cols-2 gap-4">
-              <UFormField label="用户名">
+              <UFormField :label="t('admin.users.username')">
                 <UInput v-model="newUser.username" class="w-full" />
               </UFormField>
-              <UFormField label="密码">
+              <UFormField :label="t('admin.users.password')">
                 <UInput v-model="newUser.password" type="password" class="w-full" />
               </UFormField>
-              <UFormField label="权限等级">
+              <UFormField :label="t('admin.users.level')">
                 <USelect v-model="newUser.level" :items="levelOptions" class="w-full" />
               </UFormField>
             </div>
             <div class="flex gap-2 mt-4">
-              <UButton icon="i-lucide-check" :loading="userBusy" @click="createUser">创建</UButton>
-              <UButton color="neutral" variant="ghost" @click="showCreate = false">取消</UButton>
+              <UButton icon="i-lucide-check" :loading="userBusy" @click="createUser">{{ t('common.create') }}</UButton>
+              <UButton color="neutral" variant="ghost" @click="showCreate = false">{{ t('common.cancel') }}</UButton>
             </div>
           </UCard>
           <UCard :ui="{ body: 'p-0' }">
@@ -637,11 +647,11 @@ const statCards = computed(() => {
               :data="users"
               :loading="usersLoading"
               :columns="[
-                { accessorKey: 'username', header: '用户名' },
-                { accessorKey: 'role', header: '账号权限' },
-                { accessorKey: 'reason', header: '原因' },
-                { accessorKey: 'created_at', header: '注册时间' },
-                { accessorKey: 'actions', header: '操作', enableSorting: false }
+                { accessorKey: 'username', header: t('admin.users.username') },
+                { accessorKey: 'role', header: t('admin.users.role') },
+                { accessorKey: 'reason', header: t('admin.users.reason') },
+                { accessorKey: 'created_at', header: t('admin.users.createdAt') },
+                { accessorKey: 'actions', header: t('admin.users.actions'), enableSorting: false }
               ]"
             >
               <template #username-cell="{ row }">
@@ -675,10 +685,10 @@ const statCards = computed(() => {
                       size="xs"
                       color="neutral"
                       variant="ghost"
-                      aria-label="冻结"
+                      :aria-label="t('admin.status.freeze')"
                       @click="openStatusModal(row.original, 'frozen')"
                     >
-                      <span class="hidden xl:inline">冻结</span>
+                      <span class="hidden xl:inline">{{ t('admin.status.freeze') }}</span>
                     </UButton>
                     <UButton
                       v-if="row.original.status === 'frozen'"
@@ -686,10 +696,10 @@ const statCards = computed(() => {
                       size="xs"
                       color="neutral"
                       variant="ghost"
-                      aria-label="解冻"
+                      :aria-label="t('admin.status.unfreeze')"
                       @click="setUserStatus(row.original, 'active')"
                     >
-                      <span class="hidden xl:inline">解冻</span>
+                      <span class="hidden xl:inline">{{ t('admin.status.unfreeze') }}</span>
                     </UButton>
                     <UButton
                       v-if="row.original.status !== 'banned'"
@@ -697,10 +707,10 @@ const statCards = computed(() => {
                       size="xs"
                       color="error"
                       variant="ghost"
-                      aria-label="封禁"
+                      :aria-label="t('admin.status.ban')"
                       @click="openStatusModal(row.original, 'banned')"
                     >
-                      <span class="hidden xl:inline">封禁</span>
+                      <span class="hidden xl:inline">{{ t('admin.status.ban') }}</span>
                     </UButton>
                     <UButton
                       v-if="row.original.status === 'banned'"
@@ -708,20 +718,20 @@ const statCards = computed(() => {
                       size="xs"
                       color="neutral"
                       variant="ghost"
-                      aria-label="解封"
+                      :aria-label="t('admin.status.unban')"
                       @click="setUserStatus(row.original, 'active')"
                     >
-                      <span class="hidden xl:inline">解封</span>
+                      <span class="hidden xl:inline">{{ t('admin.status.unban') }}</span>
                     </UButton>
                     <UButton
                       icon="i-lucide-trash"
                       size="xs"
                       color="neutral"
                       variant="ghost"
-                      aria-label="删除"
+                      :aria-label="t('common.delete')"
                       @click="deleteUser(row.original)"
                     >
-                      <span class="hidden xl:inline">删除</span>
+                      <span class="hidden xl:inline">{{ t('common.delete') }}</span>
                     </UButton>
                   </template>
                 </div>
@@ -732,20 +742,19 @@ const statCards = computed(() => {
           <UModal v-model:open="statusModalOpen">
             <template #content>
               <UCard>
-                <template #header>{{ statusAction === 'frozen' ? '冻结用户' : '封禁用户' }}</template>
+                <template #header>{{ statusAction === 'frozen' ? t('admin.statusModal.freezeTitle') : t('admin.statusModal.banTitle') }}</template>
                 <div class="space-y-4">
                   <p class="text-sm text-(--ui-muted)">
-                    将{{ statusAction === 'frozen' ? '冻结' : '封禁' }}用户「{{ statusTarget?.username }}」。
-                    {{ statusAction === 'frozen' ? '冻结后仅可登录与订阅，无法使用其他功能。' : '封禁后无法登录，个人主页将限制显示。' }}
+                    {{ statusAction === 'frozen' ? t('admin.statusModal.freezeBody', { name: statusTarget?.username }) : t('admin.statusModal.banBody', { name: statusTarget?.username }) }}
                   </p>
-                  <UFormField :label="statusAction === 'frozen' ? '冻结原因' : '封禁原因'" hint="将展示在该用户个人主页">
-                    <UTextarea v-model="statusReason" :rows="3" placeholder="请输入原因…" class="w-full" />
+                  <UFormField :label="statusAction === 'frozen' ? t('admin.statusModal.freezeReason') : t('admin.statusModal.banReason')" :hint="t('admin.statusModal.reasonHint')">
+                    <UTextarea v-model="statusReason" :rows="3" :placeholder="t('admin.statusModal.reasonPlaceholder')" class="w-full" />
                   </UFormField>
                 </div>
                 <template #footer>
                   <div class="flex justify-end gap-2">
-                    <UButton variant="subtle" color="neutral" @click="statusModalOpen = false">取消</UButton>
-                    <UButton :color="statusAction === 'banned' ? 'error' : 'warning'" icon="i-lucide-check" :loading="statusBusy" @click="confirmStatusModal">确认</UButton>
+                    <UButton variant="subtle" color="neutral" @click="statusModalOpen = false">{{ t('common.cancel') }}</UButton>
+                    <UButton :color="statusAction === 'banned' ? 'error' : 'warning'" icon="i-lucide-check" :loading="statusBusy" @click="confirmStatusModal">{{ t('common.confirm') }}</UButton>
                   </div>
                 </template>
               </UCard>
@@ -761,14 +770,14 @@ const statCards = computed(() => {
                   <UIcon name="i-lucide-database-backup" class="size-5" />
                 </div>
                 <div class="flex-1">
-                  <p class="font-semibold">导出数据备份</p>
+                  <p class="font-semibold">{{ t('admin.backup.exportTitle') }}</p>
                   <p class="text-sm text-(--ui-muted) mt-1">
-                    将导出全部用户、页面、修订、注册码、订阅与站点设置为 JSON 文件。
+                    {{ t('admin.backup.exportDesc') }}
                   </p>
                 </div>
               </div>
               <template #footer>
-                <UButton icon="i-lucide-download" @click="backup">立即备份</UButton>
+                <UButton icon="i-lucide-download" @click="backup">{{ t('admin.backup.now') }}</UButton>
               </template>
             </UCard>
 
@@ -778,15 +787,15 @@ const statCards = computed(() => {
                   <UIcon name="i-lucide-upload" class="size-5" />
                 </div>
                 <div class="flex-1">
-                  <p class="font-semibold">导入数据备份</p>
+                  <p class="font-semibold">{{ t('admin.backup.importTitle') }}</p>
                   <p class="text-sm text-(--ui-muted) mt-1">
-                    选择备份 JSON 文件并导入，兼容新版与旧版导出的数据。导入将覆盖备份中包含的现有数据，请谨慎操作。
+                    {{ t('admin.backup.importDesc') }}
                   </p>
                 </div>
               </div>
               <template #footer>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <UButton icon="i-lucide-upload" :loading="importBusy" :disabled="!importFile" @click="importBackup">导入</UButton>
+                  <UButton icon="i-lucide-upload" :loading="importBusy" :disabled="!importFile" @click="importBackup">{{ t('admin.backup.import') }}</UButton>
                   <input
                     type="file"
                     accept=".json,application/json"
@@ -808,7 +817,7 @@ const statCards = computed(() => {
           <template #header>
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-sparkles" class="size-5 text-(--ui-primary)" />
-              <span class="font-semibold">发现新版本</span>
+              <span class="font-semibold">{{ t('admin.versionModal.title') }}</span>
             </div>
           </template>
           <div class="space-y-4">
@@ -821,9 +830,9 @@ const statCards = computed(() => {
           </div>
           <template #footer>
             <div class="flex items-center justify-between gap-2">
-              <UButton icon="i-lucide-external-link" variant="outline" color="neutral" :to="versionInfo?.release_url" target="_blank">查看Release</UButton>
+              <UButton icon="i-lucide-external-link" variant="outline" color="neutral" :to="versionInfo?.release_url" target="_blank">{{ t('admin.versionModal.viewRelease') }}</UButton>
               <div class="flex items-center gap-2">
-                <UButton variant="subtle" color="neutral" @click="versionModalOpen = false">关闭</UButton>
+                <UButton variant="subtle" color="neutral" @click="versionModalOpen = false">{{ t('admin.close') }}</UButton>
               </div>
             </div>
           </template>

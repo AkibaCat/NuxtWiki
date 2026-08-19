@@ -1,8 +1,8 @@
 {
   "name": "NuxtWiki",
   "versions": {
-    "id": 5,
-    "version": "1.2.0" 
+    "id": 7,
+    "version": "1.3.0"
   },
   "private": true,
   "type": "module",
@@ -22,6 +22,7 @@
     "@nuxt/icon": "^2.3.1",
     "@nuxt/ui": "^4.10.0",
     "@nuxtjs/color-mode": "^4.0.1",
+    "@nuxtjs/i18n": "^10.6.0",
     "nuxt": "^4.5.2",
     "tailwindcss": "^4.3.3"
   },

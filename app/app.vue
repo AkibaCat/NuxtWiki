@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 应用根组件：挂载全局 UI 容器（UApp/UToaster），并渲染布局与页面。
 useHead({
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1' },

@@ -47,7 +47,7 @@
   72%         { background: color-mix(in srgb, var(--ui-primary) 30%, transparent); }
 }
 .wiki-content p { margin: 0.5em 0; }
-.wiki-content pre { background: var(--ui-bg-elevated); border: 1px solid var(--ui-border); border-radius: 6px; padding: 12px 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+.wiki-content pre { background: var(--ui-bg-elevated); border: 1px solid var(--ui-border); border-radius: 6px; padding: 12px 16px; margin: 0.5em 0; overflow-x: auto; font-size: 13px; line-height: 1.5; }
 .wiki-content code { background: var(--ui-bg-elevated); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; font-family: 'Consolas', 'Monaco', 'Courier New', monospace; }
 .wiki-content pre code { background: none; padding: 0; border-radius: 0; }
 
@@ -102,8 +102,11 @@
 .dark .tok-key { color: #61afef; }
 .dark .tok-deco { color: #98c379; }
 .wiki-content blockquote { border-left: 3px solid var(--ui-primary); padding: 0.5em 1em; margin: 0.5em 0; background: var(--ui-bg-elevated); border-radius: 0 6px 6px 0; }
-.wiki-content table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
-.wiki-content th, .wiki-content td { border: 1px solid var(--ui-border); padding: 6px 10px; text-align: left; }
+/* 表格：GitHub 风格 —— 内容自适应宽度（不占满整行）、可横向滚动、行间分隔线 */
+.wiki-content table { border-spacing: 0; border-collapse: collapse; display: block; width: max-content; max-width: 100%; overflow: auto; margin: 0.5em 0; }
+.wiki-content table tr { background: transparent; border-top: 1px solid var(--ui-border); }
+.wiki-content table tr:nth-child(2n) { background: color-mix(in srgb, var(--ui-bg-elevated) 50%, transparent); }
+.wiki-content th, .wiki-content td { border: 1px solid var(--ui-border); padding: 6px 13px; text-align: left; }
 .wiki-content th { background: var(--ui-bg-elevated); font-weight: 600; }
 .wiki-content ul { list-style: disc; padding-left: 2em; margin: 0.3em 0; }
 .wiki-content ol { list-style: decimal; padding-left: 2em; margin: 0.3em 0; }
@@ -119,6 +122,24 @@
 /* details/summary：折叠面板 summary 显示为可点击样式 */
 .wiki-content details { margin: 0.5em 0; }
 .wiki-content details > summary { cursor: pointer; }
+
+/* ================= 容器 ::: info/tip/warning/danger/details ================= */
+.wiki-container { margin: 1em 0; padding: 0.6em 1em; box-sizing: border-box; border: 1px solid var(--ui-border); border-radius: 8px; }
+.wiki-container-title { font-weight: 600; margin-bottom: 0.35em; }
+.wiki-container-body > :first-child { margin-top: 0; }
+.wiki-container-body > :last-child { margin-bottom: 0; }
+.wiki-container > summary { cursor: pointer; font-weight: 600; }
+/* 各类型默认配色（描边色与标题色一致，略降透明度更柔和） */
+.wiki-container-info    { background: rgba(33, 150, 243, .10); border-color: rgba(33, 150, 243, .45); }
+.wiki-container-info    .wiki-container-title { color: #2aa1ff; }
+.wiki-container-tip     { background: rgba(34, 197, 94, .10); border-color: rgba(34, 197, 94, .45); }
+.wiki-container-tip     .wiki-container-title { color: #2fd97a; }
+.wiki-container-warning { background: rgba(245, 158, 11, .10); border-color: rgba(245, 158, 11, .45); }
+.wiki-container-warning .wiki-container-title { color: #f5b040; }
+.wiki-container-danger  { background: rgba(239, 68, 68, .12); border-color: rgba(239, 68, 68, .45); }
+.wiki-container-danger  .wiki-container-title { color: #ff6b6b; }
+.wiki-container-details { background: rgba(148, 163, 184, .08); border-color: rgba(148, 163, 184, .45); }
+.wiki-container-details .wiki-container-title { color: #94a3b8; }
 
 /* 移动端「此页目录」浮窗：向下滑动 + 渐显过渡 */
 .toc-drop-enter-active, .toc-drop-leave-active { transition: opacity .25s ease, transform .25s ease; }
@@ -152,3 +173,4 @@
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+

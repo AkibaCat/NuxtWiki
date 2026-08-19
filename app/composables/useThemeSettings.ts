@@ -108,7 +108,7 @@ export const useThemeSettings = () => {
 
   const persist = () => {
     if (import.meta.server) return
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings.value)) } catch { /* ignore */ }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings.value)) } catch { /* 写入失败则忽略 */ }
   }
 
   // 当前应生效的主色 hex（随明暗联动曜石黑/象牙白）

@@ -1,6 +1,10 @@
 <h1 align="center">NuxtWiki</h1>
 
 <p align="center">
+  <a href="docs/en/README.md">English</a> | <a href="README.md" style="color: #007bff;">简体中文</a> | <a href="docs/zh-TW/README.md">繁体中文</a>
+</p>
+
+<p align="center">
   <a href="https://nuxt.com/"><img src="https://img.shields.io/badge/Made%20with-Nuxt%204-00DC82?logo=nuxt&labelColor=020420" alt="Made with Nuxt 4"></a>
   <a href="https://www.php.net/"><img src="https://img.shields.io/badge/PHP-%E2%89%A58.1-777BB4?logo=php&labelColor=020420" alt="PHP ≥ 8.1"></a>
   <a href="https://www.mysql.com/"><img src="https://img.shields.io/badge/MySQL-5.7%2B-4479A1?logo=mysql&labelColor=020420" alt="MySQL 5.7+"></a>

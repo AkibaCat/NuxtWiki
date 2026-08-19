@@ -132,6 +132,7 @@ final class Auth
     public static function login(int $userId): void
     {
         self::startSession();
+        // 重新生成会话 ID，防止会话固定（session fixation）攻击
         session_regenerate_id(true);
         $_SESSION['user_id'] = $userId;
     }

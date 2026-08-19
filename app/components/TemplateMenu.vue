@@ -1,4 +1,5 @@
 <template>
+  <!-- 模板菜单：下拉展示 Nuxt 官方各 Starter 模板链接（当前选中 Starter） -->
   <UDropdownMenu
     v-slot="{ open }"
     :modal="false"

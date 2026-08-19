@@ -1,6 +1,8 @@
 <script setup lang="ts">
+// 页面职责：对比页面两个修订版本之间的差异
 const route = useRoute()
 const api = useApi()
+const { t } = useI18n()
 const tag = computed(() => String(route.params.tag || ''))
 
 const diff = ref<any>(null)
@@ -18,7 +20,7 @@ const compare = async (from?: number, to?: number) => {
     fromRev.value = (r.data as any).from
     toRev.value = (r.data as any).to
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('diff.loadFailed')
   }
   loading.value = false
 }
@@ -31,7 +33,7 @@ onMounted(async () => {
     const to = Number(route.query.to || revisions.value[0]?.revision || 0)
     await compare(from, to)
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('diff.loadFailed')
     loading.value = false
   }
 })
@@ -51,9 +53,9 @@ const rows = computed(() => {
   <div class="max-w-4xl mx-auto px-4 py-8">
     <div class="flex items-center gap-3 mb-6">
       <UButton :to="`/${tag}`" icon="i-lucide-arrow-left" size="xs" color="neutral" variant="ghost">
-        返回页面
+        {{ t('diff.back') }}
       </UButton>
-      <h1 class="text-2xl font-bold">版本对比</h1>
+      <h1 class="text-2xl font-bold">{{ t('diff.title') }}</h1>
     </div>
 
     <div v-if="loading" class="flex justify-center py-16">
@@ -76,18 +78,18 @@ const rows = computed(() => {
           class="w-64"
         />
         <UButton size="sm" icon="i-lucide-git-compare" @click="compare(fromRev, toRev)">
-          对比
+          {{ t('diff.compare') }}
         </UButton>
       </div>
 
       <div class="rounded-lg border border-(--ui-border) overflow-hidden">
         <div class="grid grid-cols-2 text-sm border-b border-b-(--ui-border) bg-(--ui-bg-elevated)">
           <div class="px-4 py-2 font-medium">{{ tag }}
-            <span v-if="diff.from_meta" class="text-(--ui-muted) font-normal">r{{ diff.from_meta.revision }}（{{ diff.from_meta.nickname || diff.from_meta.username || '匿名' }}）</span>
-            <span v-else class="text-(--ui-muted) font-normal">空（新增）</span>
+            <span v-if="diff.from_meta" class="text-(--ui-muted) font-normal">r{{ diff.from_meta.revision }}（{{ diff.from_meta.nickname || diff.from_meta.username || t('recent.anonymous') }}）</span>
+            <span v-else class="text-(--ui-muted) font-normal">{{ t('diff.fromEmpty') }}</span>
           </div>
           <div class="px-4 py-2 font-medium border-l border-l-(--ui-border)">{{ tag }}
-            <span v-if="diff.to_meta" class="text-(--ui-muted) font-normal">r{{ diff.to_meta.revision }}（{{ diff.to_meta.nickname || diff.to_meta.username || '匿名' }}）</span>
+            <span v-if="diff.to_meta" class="text-(--ui-muted) font-normal">r{{ diff.to_meta.revision }}（{{ diff.to_meta.nickname || diff.to_meta.username || t('recent.anonymous') }}）</span>
           </div>
         </div>
         <div class="overflow-x-auto">
@@ -101,7 +103,7 @@ const rows = computed(() => {
               :class="row.type === 'add' ? 'bg-(--ui-success)/10 text-(--ui-success)' : row.type === 'del' ? 'bg-(--ui-bg-elevated) text-(--ui-muted)' : ''"
             >{{ row.right }}</div>
           </div>
-          <p v-if="!rows.length" class="text-center py-8 text-sm text-(--ui-muted)">两个版本内容一致</p>
+          <p v-if="!rows.length" class="text-center py-8 text-sm text-(--ui-muted)">{{ t('diff.same') }}</p>
         </div>
       </div>
     </div>

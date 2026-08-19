@@ -1,18 +1,21 @@
 <script setup lang="ts">
+const { t } = useI18n()
 const api = useApi()
 
+// 最近更新页：按时间范围展示最近修订内容
 const rows = ref<any[]>([])
 const loading = ref(true)
 const error = ref('')
 const days = ref(0)
 
+// 加载最近更新（days 为 0 时不过滤，表示全部时限）
 const load = async () => {
   loading.value = true
   const r = await api.get('page.recent', { limit: 50, days: days.value || undefined })
   if (r.ok) {
     rows.value = (r.data as any[]) ?? []
   } else {
-    error.value = r.error?.message || '加载失败'
+    error.value = r.error?.message || t('recent.loadFailed')
   }
   loading.value = false
 }
@@ -23,13 +26,13 @@ onMounted(load)
 <template>
   <div class="max-w-4xl mx-auto px-4 py-8">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-      <h1 class="text-2xl font-bold">最近更改</h1>
+      <h1 class="text-2xl font-bold">{{ t('recent.title') }}</h1>
       <URadioGroup
         v-model="days"
         :items="[
-          { label: '全部', value: 0 },
-          { label: '7 天', value: 7 },
-          { label: '30 天', value: 30 }
+          { label: t('recent.all'), value: 0 },
+          { label: t('recent.days7'), value: 7 },
+          { label: t('recent.days30'), value: 30 }
         ]"
         color="primary"
         @update:model-value="load"
@@ -51,13 +54,13 @@ onMounted(load)
           </div>
           <p v-if="r.comment" class="text-sm text-(--ui-muted) mt-0.5">{{ r.comment }}</p>
           <div class="flex items-center gap-2 mt-1 text-xs text-(--ui-muted)">
-            <span>{{ r.nickname || r.username || '匿名' }}</span>
+            <span>{{ r.nickname || r.username || t('recent.anonymous') }}</span>
             <span>·</span>
             <span>{{ formatDate(r.created_at) }}</span>
           </div>
         </li>
       </ul>
-      <p v-if="!rows.length" class="text-center py-16 text-(--ui-muted)">暂无更改记录</p>
+      <p v-if="!rows.length" class="text-center py-16 text-(--ui-muted)">{{ t('recent.empty') }}</p>
     </div>
   </div>
 </template>

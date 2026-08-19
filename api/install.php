@@ -84,6 +84,7 @@ if ($method === 'POST') {
 
     $driver = ($_POST['driver'] ?? 'sqlite') === 'mysql' ? 'mysql' : 'sqlite';
     $siteName = trim((string)($_POST['site_name'] ?? 'NuxtWiki'));
+    $language = in_array(($_POST['language'] ?? 'zh-CN'), ['zh-CN', 'zh-TW', 'en'], true) ? $_POST['language'] : 'zh-CN';
     $homeTag  = trim((string)($_POST['home_tag'] ?? 'HomePage'));
     $homeTag  = preg_replace('/[^\p{L}\p{N}_\-\.]+/u', '_', str_replace(' ', '_', $homeTag)) ?? $homeTag;
     $adminUser = trim((string)($_POST['admin_user'] ?? 'Admin'));
@@ -132,7 +133,7 @@ if ($method === 'POST') {
         $now = date('Y-m-d H:i:s');
         $settings = [
             'site_name' => $siteName, 'site_description' => '一个基于 Nuxt UI 与 PHP/MySQL 的轻量 Wiki。',
-            'site_footer' => '', 'home_tag' => $homeTag, 'language' => 'zh-CN',
+            'site_footer' => '', 'home_tag' => $homeTag, 'language' => $language,
             'allow_registration' => '1',
             'default_read_level' => '0', 'default_edit_level' => '3', 'default_history_level' => '3',
             'default_diff_level' => '2', 'default_backlinks_level' => '3', 'default_perms_level' => '1',
@@ -147,23 +148,36 @@ if ($method === 'POST') {
         $st = $pdo->prepare('INSERT INTO users (username, password, is_admin, level, created_at, updated_at) VALUES (?, ?, 1, 1, ?, ?)');
         $st->execute([$adminUser, password_hash($adminPass, PASSWORD_DEFAULT), $now, $now]);
 
-        // 4) 生成首页（内容取自独立种子文件 api/seed/welcome.md，站点名通过占位符注入）
-        $pageId = (int)$pdo->lastInsertId();
-        $homeBody = str_replace('{{SITE_NAME}}', $siteName, (string)file_get_contents($baseDir . '/seed/welcome.md'));
-        $st = $pdo->prepare('INSERT INTO pages (tag, title, body, created_at, updated_at, revision, acl_read, acl_edit, acl_history, acl_diff, acl_backlinks, acl_acl, acl_contributors) VALUES (?, ?, ?, ?, ?, 1, \'0\', \'3\', \'3\', \'2\', \'3\', \'1\', \'0\')');
-        $st->execute([$homeTag, "欢迎使用 $siteName", $homeBody, $now, $now]);
-        $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, \'初始页面\', ?, 1, ?)');
-        $st->execute([$pageId, $homeTag, "欢迎使用 $siteName", $homeBody, null, $now]);
+        // 4) 生成初始页面：按安装选择的语言读取对应语言的种子文件
+        //    (seed/<name>.md 为简体中文；语言版为 seed/<name>.<lang>.md)
+        $seedI18n = [
+            'zh-CN' => ['homeTitle' => "欢迎使用 $siteName", 'helpTitle' => '语法帮助', 'comment' => '初始页面'],
+            'zh-TW' => ['homeTitle' => "歡迎使用 $siteName", 'helpTitle' => '語法幫助', 'comment' => '初始頁面'],
+            'en'    => ['homeTitle' => "Welcome to $siteName", 'helpTitle' => 'Grammar Help', 'comment' => 'Initial page'],
+        ];
+        $si = $seedI18n[$language] ?? $seedI18n['zh-CN'];
+        $seed = static function (string $name) use ($baseDir, $language): string {
+            $alt = "$baseDir/seed/$name.$language.md";
+            return is_file($alt) ? $alt : "$baseDir/seed/$name.md";
+        };
 
-        // 5) 语法教学页（内容取自独立种子文件 api/seed/grammar-help.md）
+        // 首页（站点名通过 {{SITE_NAME}} 占位符注入）
+        $pageId = (int)$pdo->lastInsertId();
+        $homeBody = str_replace('{{SITE_NAME}}', $siteName, (string)file_get_contents($seed('welcome')));
+        $st = $pdo->prepare('INSERT INTO pages (tag, title, body, created_at, updated_at, revision, acl_read, acl_edit, acl_history, acl_diff, acl_backlinks, acl_acl, acl_contributors) VALUES (?, ?, ?, ?, ?, 1, \'0\', \'3\', \'3\', \'2\', \'3\', \'1\', \'0\')');
+        $st->execute([$homeTag, $si['homeTitle'], $homeBody, $now, $now]);
+        $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)');
+        $st->execute([$pageId, $homeTag, $si['homeTitle'], $homeBody, $si['comment'], null, $now]);
+
+        // 语法教学页
         $helpTag = 'GrammarHelp';
-        $helpTitle = '语法帮助';
-        $helpBody = (string)file_get_contents($baseDir . '/seed/grammar-help.md');
+        $helpTitle = $si['helpTitle'];
+        $helpBody = (string)file_get_contents($seed('grammar-help'));
         $st = $pdo->prepare('INSERT INTO pages (tag, title, body, created_at, updated_at, revision, acl_read, acl_edit, acl_history, acl_diff, acl_backlinks, acl_acl, acl_contributors) VALUES (?, ?, ?, ?, ?, 1, \'0\', \'3\', \'3\', \'2\', \'3\', \'1\', \'0\')');
         $st->execute([$helpTag, $helpTitle, $helpBody, $now, $now]);
         $helpId = (int)$pdo->lastInsertId();
-        $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, \'初始页面\', ?, 1, ?)');
-        $st->execute([$helpId, $helpTag, $helpTitle, $helpBody, null, $now]);
+        $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)');
+        $st->execute([$helpId, $helpTag, $helpTitle, $helpBody, $si['comment'], null, $now]);
     } catch (Throwable $e) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => ['code' => 'INSTALL_FAILED', 'message' => '安装失败: ' . $e->getMessage()]]);
@@ -175,7 +189,7 @@ if ($method === 'POST') {
         'db' => $dbConf,
         'site' => [
             'name' => $siteName, 'description' => '一个基于 Nuxt UI 与 PHP/MySQL 的轻量 Wiki。',
-            'base_url' => '', 'home_tag' => $homeTag, 'language' => 'zh-CN',
+            'base_url' => '', 'home_tag' => $homeTag, 'language' => $language,
             'allow_registration' => true,
             'default_read_level' => '0', 'default_edit_level' => '3', 'default_history_level' => '3',
             'default_diff_level' => '2', 'default_backlinks_level' => '3', 'default_perms_level' => '1',
@@ -284,6 +298,12 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="card">
       <h2>站点设置</h2>
       <label>站点名称</label><input name="site_name" value="NuxtWiki" required>
+      <label>界面语言（首次访问站点的默认显示语言）</label>
+      <select name="language" id="language">
+        <option value="zh-CN" selected>简体中文</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="en">English</option>
+      </select>
       <label>首页名</label><input name="home_tag" value="Home" required>
     </div>
     <div class="card">

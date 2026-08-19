@@ -1,7 +1,9 @@
 <script setup lang="ts">
+const { t } = useI18n()
 const api = useApi()
 const toast = useToast()
 
+// 页面搜索：关键词模糊搜索 + 分页，标题/摘要带命中高亮
 const q = ref('')
 const results = ref<any[]>([])
 const total = ref(0)
@@ -13,6 +15,7 @@ const offset = ref(0)
 let timer: ReturnType<typeof setTimeout> | null = null
 
 const doSearch = async () => {
+  // 空关键词时清空结果，不发起请求
   if (!q.value.trim()) {
     results.value = []
     total.value = 0
@@ -27,12 +30,13 @@ const doSearch = async () => {
     results.value = d.results
     searched.value = true
   } else {
-    toast.add({ title: r.error?.message || '搜索失败', color: 'error' })
+    toast.add({ title: r.error?.message || t('search.failed'), color: 'error' })
   }
   loading.value = false
 }
 
 const onInput = () => {
+  // 输入防抖（400ms）后重置分页并自动搜索
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => {
     offset.value = 0
@@ -40,6 +44,7 @@ const onInput = () => {
   }, 400)
 }
 
+// 高亮关键字：在文本首次命中处用 «» 包裹（前端据此应用样式）
 const highlight = (text: string) => {
   const k = q.value.trim()
   if (!k) return text
@@ -51,13 +56,13 @@ const highlight = (text: string) => {
 
 <template>
   <div class="max-w-3xl mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold mb-6">搜索页面</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ t('search.title') }}</h1>
 
     <UInput
       v-model="q"
       icon="i-lucide-search"
       size="lg"
-      placeholder="输入关键词搜索…"
+      :placeholder="t('search.placeholder')"
       autofocus
       :loading="loading"
       class="w-full"
@@ -66,7 +71,7 @@ const highlight = (text: string) => {
     />
 
     <p v-if="searched" class="text-sm text-(--ui-muted) mt-4">
-      找到 {{ total }} 个结果
+      {{ t('search.resultCount', { total }) }}
     </p>
 
     <ul v-if="results.length" class="mt-4 divide-y divide-(--ui-border) rounded-lg border border-(--ui-border)">
@@ -76,13 +81,13 @@ const highlight = (text: string) => {
         </NuxtLink>
         <p class="text-sm text-(--ui-muted) mt-0.5 line-clamp-2" v-html="highlight(r.snippet)" />
         <p class="text-xs text-(--ui-muted) mt-1">
-          {{ r.tag }} · 修订 r{{ r.revision }} · {{ formatDate(r.updated_at) }}
+          {{ r.tag }} · {{ t('search.revision') }} r{{ r.revision }} · {{ formatDate(r.updated_at) }}
         </p>
       </li>
     </ul>
 
     <p v-if="searched && !results.length" class="text-center py-16 text-(--ui-muted)">
-      没有找到相关页面
+      {{ t('search.noResults') }}
     </p>
 
     <div v-if="total > limit" class="flex justify-center mt-6 gap-2">
@@ -93,7 +98,7 @@ const highlight = (text: string) => {
         :disabled="offset === 0"
         @click="offset -= limit; doSearch()"
       >
-        上一页
+        {{ t('search.prev') }}
       </UButton>
       <UButton
         color="neutral"
@@ -102,7 +107,7 @@ const highlight = (text: string) => {
         :disabled="offset + limit >= total"
         @click="offset += limit; doSearch()"
       >
-        下一页
+        {{ t('search.next') }}
       </UButton>
     </div>
   </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 页面职责：登录后跳转到当前用户主页 /account/<username>
 const { user, init } = useAuth()
 
 onMounted(async () => {

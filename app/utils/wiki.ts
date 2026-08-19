@@ -18,7 +18,8 @@
  *   分隔线    --- / *** / ___
  *   内部链接  [[Page]] 或 [[文本|Page]]
  *   外部链接  [文本](url)
- *   自定义高亮 [{文本|颜色}]   颜色支持 6 位十六进制（3c9c5c）或 RGB（60:156:92）
+ *   自定义高亮 [{文本|颜色}]   颜色支持 6 位十六进制（3c9c5c）、RGB（60:156:92）或 $TC（使用站点主题色）
+ *   容器       ::: 类型 [文本]  以独立成行的 ":::" 结束；类型 info/tip/warning/danger/details
  *   图片附件  ![说明|文件名](文件名.jpg)   或  {{说明|文件名}} / {{文件名}}
  *   HTML     白名单标签（div/section/details/table/span/mark/kbd/sup/sub/a/img/iframe 等），
  *            内部可继续嵌套 Markdown；危险标签与事件属性自动过滤
@@ -222,6 +223,12 @@ const matchHtmlInline = (rest: string, opts: RenderOptions): { html: string; len
   }
   // void 元素
   if (HTML_VOID.has(tag)) return { html: `<${tag}${attrsHtml}>`, len: openM[0].length }
+  // 行内代码 <code>：内部原样转义（代码展示），不做任何 Markdown 样式解析
+  if (tag === 'code') {
+    const pair = findHtmlPair(rest, 0, 'code')
+    if (pair) return { html: `<code${attrsHtml}>${esc(pair.inner)}</code>`, len: pair.end }
+    return { html: `<code${attrsHtml}>`, len: openM[0].length }
+  }
   // 行内文本标签（含出现在段内/行内的块级容器标签）：配对 + 内部嵌套 Markdown
   // 注意：块级标签在行内出现时也须走此路径，否则原始未过滤属性会被原样输出（XSS 风险）
   const pair = findHtmlPair(rest, 0, tag)
@@ -277,14 +284,16 @@ const makeTokens = (opts: RenderOptions): InlineToken[] => {
         return `<a href="${esc(att(url))}" class="attachment" download>${parseInline(url, o)}</a>`
       }
     },
-    // 自定义高亮 [{文本|颜色}] —— 颜色支持 6 位十六进制（3c9c5c）或 RGB（60:156:92）
+    // 自定义高亮 [{文本|颜色}] —— 颜色支持 6 位十六进制（3c9c5c）、RGB（60:156:92）或 $TC（使用站点主题色）
     {
-      re: /\[\{([^\]\n]+)\|(#?[0-9a-fA-F]{3,6}|\d{1,3}:\d{1,3}:\d{1,3})\}\]/,
+      re: /\[\{([^\]\n]+)\|(#?[0-9a-fA-F]{3,6}|\d{1,3}:\d{1,3}:\d{1,3}|\$[tT][cC])\}\]/,
       render: (m, o) => {
         const text = (m[1] ?? '').trim()
         const color = (m[2] ?? '').trim()
         let css = ''
-        if (/^#?[0-9a-fA-F]{3,6}$/.test(color)) {
+        if (color.toUpperCase() === '$TC') {
+          css = 'color:var(--ui-primary);'
+        } else if (/^#?[0-9a-fA-F]{3,6}$/.test(color)) {
           css = `color:${color[0] === '#' ? color : '#' + color};`
         } else {
           const [r, g, b] = color.split(':').map(Number)
@@ -684,6 +693,31 @@ export const renderWiki = (markup: string, opts: RenderOptions): RenderResult =>
       const copyIcon = '<svg class="wiki-copy-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>'
       const copyBtn = `<button type="button" class="wiki-copy" data-code="${esc(raw)}" title="复制代码"><span>${copyIcon}</span></button>`
       blocks.push(`<pre class="wiki-code"${lang ? ` data-lang="${esc(langName)}"` : ''}><code class="${hasHL ? esc('language-' + langName) : 'language-plaintext'}">${codeHtml}</code>${langLabel}${copyBtn}</pre>`)
+      continue
+    }
+
+    // 容器 ::: 类型 [文本]  （info / tip / warning / danger / details）
+    //   以 "::: 类型 ..." 开启，以独立成行的 ":::" 结束；[文本]为可选标题
+    const contM = line.match(/^ {0,3}:::[ \t]+([a-zA-Z]+)[ \t]*(.*)$/)
+    if (contM && ['info', 'tip', 'warning', 'danger', 'details'].includes((contM[1] ?? '').toLowerCase())) {
+      const type = (contM[1] ?? '').toLowerCase()
+      const title = (contM[2] ?? '').trim()
+      const buf: string[] = []
+      i++
+      while (i < lines.length && !/^ {0,3}:::[ \t]*$/.test(lines[i]!)) {
+        buf.push(lines[i]!)
+        i++
+      }
+      i++ // 跳过结束符
+      const bodyHtml = renderWiki(buf.join('\n'), opts).html
+      const defTitle: Record<string, string> = { info: 'Info', tip: 'Tip', warning: 'Warning', danger: 'Danger', details: 'Details' }
+      const titleHtml = title ? inline(title, opts) : defTitle[type]
+      const cls = `wiki-container wiki-container-${type}`
+      if (type === 'details') {
+        blocks.push(`<details class="${cls}"><summary>${titleHtml}</summary>${bodyHtml}</details>`)
+      } else {
+        blocks.push(`<div class="${cls}"><div class="wiki-container-title">${titleHtml}</div><div class="wiki-container-body">${bodyHtml}</div></div>`)
+      }
       continue
     }
 
