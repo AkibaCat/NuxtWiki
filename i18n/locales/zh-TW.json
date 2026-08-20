@@ -223,6 +223,10 @@
   "editor": {
     "wrap": "自動換行",
     "nowrap": "不換行",
+    "switchEditor": "切換編輯器",
+    "contentMode": "內容編輯器",
+    "styleMode": "樣式編輯器",
+    "stylePlaceholder": "使用 SCSS 語法編寫頁面樣式…",
     "title": {
       "home": "編輯[首頁]",
       "withPage": "編輯[{title}]"
@@ -511,6 +515,21 @@
       "title": "發現新版本",
       "viewRelease": "查看Release"
     },
-    "close": "關閉"
+    "close": "關閉",
+    "update": {
+      "title": "線上更新",
+      "now": "一鍵更新",
+      "done": "更新完成，已升級到 {version}",
+      "fail": "更新失敗",
+      "stage": {
+        "prepare": "準備中…",
+        "download": "下載更新包…",
+        "extract": "解壓更新包…",
+        "clean": "清理舊版本資源…",
+        "apply": "正在替換檔案…",
+        "done": "更新完成",
+        "error": "更新失敗"
+      }
+    }
   }
 }

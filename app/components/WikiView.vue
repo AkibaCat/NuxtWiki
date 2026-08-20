@@ -94,6 +94,9 @@ const rendered = computed(() => {
   return renderWiki(page.value.page.body, { tag: page.value.page.tag })
 })
 
+// 页面样式表编译产物（作用域为 .wiki-content），随页面注入
+const compiledPageStyle = computed(() => compilePageStyle(page.value?.page?.style || ''))
+
 // 目录数据写入全局（供布局移动端「此页目录」下拉浮窗读取）；离开页面时清空
 watch(() => rendered.value?.toc, (toc) => setToc(toc), { immediate: true })
 onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
@@ -201,6 +204,7 @@ const toggleWatch = async () => {
           <UButton v-if="canContributors" :to="`/${page.page.tag}/contributors`" icon="i-lucide-users" size="xs" color="neutral" variant="ghost" :label="t('wiki.contributors')" />
         </div>
 
+        <component :is="'style'">{{ compiledPageStyle }}</component>
         <div class="wiki-content" v-html="rendered?.html"></div>
       </article>
 

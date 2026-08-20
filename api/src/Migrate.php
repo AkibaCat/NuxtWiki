@@ -44,6 +44,14 @@ final class Migrate
                 'acl_contributors' => 'TEXT NOT NULL DEFAULT \'0\'',
             ]);
 
+            // 1.2) pages / revisions 补充页面样式表（SCSS 源文本）
+            self::addColumns($db, $driver, 'pages', [
+                'style' => 'LONGTEXT',
+            ]);
+            self::addColumns($db, $driver, 'revisions', [
+                'style' => 'LONGTEXT',
+            ]);
+
             // 2) 注册码表
             if ($driver === 'mysql') {
                 $db->exec(

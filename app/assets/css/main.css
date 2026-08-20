@@ -100,6 +100,38 @@
 .dark .tok-ent { color: #c678dd; }
 .dark .tok-prop { color: #61afef; }
 .dark .tok-key { color: #61afef; }
+
+/* ===== 样式编辑器（CodeMirror SCSS）语法高亮：VSCode 配色 =====
+   颜色通过 CSS 变量注入 HighlightStyle，随主题自动切换。
+   参考 VSCode 默认主题：Light+ / Dark+ */
+:root {
+  --tok-editor-comment: #008000;   /* VSCode Light+ 注释绿 */
+  --tok-editor-keyword: #0000ff;   /* 关键字蓝 */
+  --tok-editor-string: #a31515;    /* 字符串红棕 */
+  --tok-editor-number: #098658;    /* 数字绿 */
+  --tok-editor-variable: #001080;  /* 变量深蓝 */
+  --tok-editor-property: #001080;  /* 属性深蓝 */
+  --tok-editor-function: #795e26;  /* 函数/方法黄褐 */
+  --tok-editor-type: #267f99;      /* 类型青蓝 */
+  --tok-editor-class: #795e26;     /* 类/其他黄褐 */
+  --tok-editor-tag: #800000;       /* 标签暗红 */
+  --tok-editor-attribute: #e50000; /* 属性名红 */
+  --tok-editor-control: #af00db;   /* 控制流紫 */
+}
+.dark {
+  --tok-editor-comment: #6a9955;   /* VSCode Dark+ 注释绿 */
+  --tok-editor-keyword: #569cd6;   /* 关键字蓝 */
+  --tok-editor-string: #ce9178;    /* 字符串橙棕 */
+  --tok-editor-number: #b5cea8;    /* 数字淡绿 */
+  --tok-editor-variable: #9cdcfe;  /* 变量淡蓝 */
+  --tok-editor-property: #9cdcfe;  /* 属性淡蓝 */
+  --tok-editor-function: #dcdcaa;  /* 函数/方法淡黄 */
+  --tok-editor-type: #4ec9b0;      /* 类型青绿 */
+  --tok-editor-class: #dcdcaa;     /* 类/其他淡黄 */
+  --tok-editor-tag: #569cd6;       /* 标签蓝 */
+  --tok-editor-attribute: #ce9178; /* 属性名橙棕 */
+  --tok-editor-control: #c586c0;   /* 控制流紫 */
+}
 .dark .tok-deco { color: #98c379; }
 .wiki-content blockquote { border-left: 3px solid var(--ui-primary); padding: 0.5em 1em; margin: 0.5em 0; background: var(--ui-bg-elevated); border-radius: 0 6px 6px 0; }
 /* 表格：GitHub 风格 —— 内容自适应宽度（不占满整行）、可横向滚动、行间分隔线 */

@@ -223,6 +223,10 @@
   "editor": {
     "wrap": "自动换行",
     "nowrap": "不换行",
+    "switchEditor": "切换编辑器",
+    "contentMode": "内容编辑器",
+    "styleMode": "样式编辑器",
+    "stylePlaceholder": "使用 SCSS 语法编写页面样式…",
     "title": {
       "home": "编辑[首页]",
       "withPage": "编辑[{title}]"
@@ -511,6 +515,21 @@
       "title": "发现新版本",
       "viewRelease": "查看Release"
     },
-    "close": "关闭"
+    "close": "关闭",
+    "update": {
+      "title": "在线更新",
+      "now": "一键更新",
+      "done": "更新完成，已升级到 {version}",
+      "fail": "更新失败",
+      "stage": {
+        "prepare": "准备中…",
+        "download": "下载更新包…",
+        "extract": "解压更新包…",
+        "clean": "清理旧版本资源…",
+        "apply": "正在替换文件…",
+        "done": "更新完成",
+        "error": "更新失败"
+      }
+    }
   }
 }

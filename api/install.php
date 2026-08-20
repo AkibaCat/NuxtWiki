@@ -169,15 +169,16 @@ if ($method === 'POST') {
         $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)');
         $st->execute([$pageId, $homeTag, $si['homeTitle'], $homeBody, $si['comment'], null, $now]);
 
-        // 语法教学页
+        // 语法教学页（含初始页面样式表：仅此一份，注释为英文）
         $helpTag = 'GrammarHelp';
         $helpTitle = $si['helpTitle'];
         $helpBody = (string)file_get_contents($seed('grammar-help'));
-        $st = $pdo->prepare('INSERT INTO pages (tag, title, body, created_at, updated_at, revision, acl_read, acl_edit, acl_history, acl_diff, acl_backlinks, acl_acl, acl_contributors) VALUES (?, ?, ?, ?, ?, 1, \'0\', \'3\', \'3\', \'2\', \'3\', \'1\', \'0\')');
-        $st->execute([$helpTag, $helpTitle, $helpBody, $now, $now]);
+        $helpStyle = (string)file_get_contents("$baseDir/seed/grammar-help.scss");
+        $st = $pdo->prepare('INSERT INTO pages (tag, title, body, style, created_at, updated_at, revision, acl_read, acl_edit, acl_history, acl_diff, acl_backlinks, acl_acl, acl_contributors) VALUES (?, ?, ?, ?, ?, ?, 1, \'0\', \'3\', \'3\', \'2\', \'3\', \'1\', \'0\')');
+        $st->execute([$helpTag, $helpTitle, $helpBody, $helpStyle, $now, $now]);
         $helpId = (int)$pdo->lastInsertId();
-        $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)');
-        $st->execute([$helpId, $helpTag, $helpTitle, $helpBody, $si['comment'], null, $now]);
+        $st = $pdo->prepare('INSERT INTO revisions (page_id, tag, title, body, style, comment, user_id, revision, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)');
+        $st->execute([$helpId, $helpTag, $helpTitle, $helpBody, $helpStyle, $si['comment'], null, $now]);
     } catch (Throwable $e) {
         http_response_code(500);
         echo json_encode(['ok' => false, 'error' => ['code' => 'INSTALL_FAILED', 'message' => '安装失败: ' . $e->getMessage()]]);

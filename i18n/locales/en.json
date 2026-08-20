@@ -223,6 +223,10 @@
   "editor": {
     "wrap": "Wrap",
     "nowrap": "No wrap",
+    "switchEditor": "Switch editor",
+    "contentMode": "Content editor",
+    "styleMode": "Style editor",
+    "stylePlaceholder": "Write page styles using SCSS syntax…",
     "title": {
       "home": "Edit[Home]",
       "withPage": "Edit[{title}]"
@@ -511,6 +515,21 @@
       "title": "New Version Found",
       "viewRelease": "View Release"
     },
-    "close": "Close"
+    "close": "Close",
+    "update": {
+      "title": "Online Update",
+      "now": "Update Now",
+      "done": "Update completed, upgraded to {version}",
+      "fail": "Update failed",
+      "stage": {
+        "prepare": "Preparing…",
+        "download": "Downloading update package…",
+        "extract": "Extracting package…",
+        "clean": "Cleaning old assets…",
+        "apply": "Replacing files…",
+        "done": "Update completed",
+        "error": "Update failed"
+      }
+    }
   }
 }

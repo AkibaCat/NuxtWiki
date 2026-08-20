@@ -92,6 +92,78 @@ const autoCheckVersion = async () => {
   }
 }
 
+// ============ 在线更新 ============
+// 状态文件由后端写盘，前端轮询 admin.update-status 驱动右上角浮窗进度与完成提示
+const updateState = reactive({
+  open: false,        // 浮窗是否显示
+  phase: 'idle',      // idle | running | done | error
+  title: '',          // 当前阶段文案
+  percent: 0,         // 0~100
+  version: '',        // 目标版本
+  message: ''         // 错误信息
+})
+let updateTimer: ReturnType<typeof setInterval> | null = null
+const updateBusy = ref(false)
+
+const updateStageLabel = (key: string) => {
+  switch (key) {
+    case 'prepare': return t('admin.update.stage.prepare')
+    case 'download': return t('admin.update.stage.download')
+    case 'extract': return t('admin.update.stage.extract')
+    case 'clean': return t('admin.update.stage.clean')
+    case 'apply': return t('admin.update.stage.apply')
+    case 'done': return t('admin.update.stage.done')
+    case 'error': return t('admin.update.stage.error')
+    default: return ''
+  }
+}
+
+const stopUpdatePoll = () => {
+  if (updateTimer) { clearInterval(updateTimer); updateTimer = null }
+}
+
+const fetchUpdateStatus = async () => {
+  const r = await api.get('admin.update-status')
+  if (!r.ok) return
+  const s = (r.data as any) ?? {}
+  updateState.percent = s.percent ?? 0
+  updateState.title = updateStageLabel(s.title ?? '')
+  updateState.version = s.version ?? ''
+  updateState.message = s.message ?? ''
+  if (s.phase === 'done') {
+    stopUpdatePoll()
+    versionInfo.value = { ...(versionInfo.value || {}), current_version: updateState.version }
+    toast.add({ title: t('admin.update.done', { version: updateState.version }), color: 'success' })
+    // 更新完成后自动跳回首页（组件已按新版本替换，需强制刷新以加载最新资源）
+    setTimeout(() => { navigateTo('/', { reload: true }) }, 1200)
+  } else if (s.phase === 'error') {
+    stopUpdatePoll()
+    toast.add({ title: t('admin.update.fail'), description: updateState.message, color: 'error' })
+    setTimeout(() => { updateState.open = false }, 2500)
+  }
+}
+
+const startUpdate = async () => {
+  if (updateBusy.value) return
+  updateBusy.value = true
+  updateState.open = true
+  updateState.percent = 0
+  updateState.phase = 'running'
+  updateState.title = t('admin.update.stage.prepare')
+  updateTimer = setInterval(fetchUpdateStatus, 800)
+
+  const r = await api.post('admin.update')
+  if (!r.ok && updateState.phase !== 'done' && updateState.phase !== 'error') {
+    stopUpdatePoll()
+    toast.add({ title: r.error?.message || t('admin.update.fail'), color: 'error' })
+    updateState.open = false
+  }
+  await fetchUpdateStatus() // POST 返回后再兜底读取一次最终状态
+  updateBusy.value = false
+}
+
+onBeforeUnmount(stopUpdatePoll)
+
 // ============ 设置 ============
 const settings = ref<any>({})
 const settingsBusy = ref(false)
@@ -832,6 +904,13 @@ const statCards = computed(() => {
             <div class="flex items-center justify-between gap-2">
               <UButton icon="i-lucide-external-link" variant="outline" color="neutral" :to="versionInfo?.release_url" target="_blank">{{ t('admin.versionModal.viewRelease') }}</UButton>
               <div class="flex items-center gap-2">
+                <UButton
+                  v-if="versionInfo?.has_update"
+                  color="primary"
+                  icon="i-lucide-arrow-up-circle"
+                  :loading="updateBusy"
+                  @click="startUpdate"
+                >{{ t('admin.update.now') }}</UButton>
                 <UButton variant="subtle" color="neutral" @click="versionModalOpen = false">{{ t('admin.close') }}</UButton>
               </div>
             </div>
@@ -839,5 +918,51 @@ const statCards = computed(() => {
         </UCard>
       </template>
     </UModal>
+
+    <!-- 在线更新进度浮窗（页面右上角） -->
+    <Teleport to="body">
+      <Transition name="update-pop">
+        <div
+          v-if="updateState.open"
+          class="fixed top-4 right-4 z-[100] w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-(--ui-border) bg-(--ui-bg-elevated) shadow-lg"
+        >
+          <div class="flex items-center gap-2 px-4 pt-3.5">
+            <UIcon
+              :name="updateState.phase === 'error' ? 'i-lucide-cloud-off' : 'i-lucide-cloud-upload'"
+              :class="updateState.phase === 'error' ? 'text-red-500' : 'text-(--ui-primary)'"
+              class="size-4 shrink-0"
+            />
+            <span class="text-sm font-semibold">{{ t('admin.update.title') }}</span>
+          </div>
+          <div class="px-4 py-2">
+            <p class="min-h-[1.25rem] text-sm text-(--ui-muted)">{{ updateState.title }}</p>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-(--ui-bg-active)">
+              <div
+                class="h-full rounded-full bg-(--ui-primary) transition-all duration-300"
+                :style="{ width: updateState.percent + '%' }"
+              ></div>
+            </div>
+            <div class="mt-1 text-right text-xs text-(--ui-muted)">{{ updateState.percent }}%</div>
+          </div>
+          <p
+            v-if="updateState.phase === 'error'"
+            class="mb-3 px-4 text-xs leading-relaxed break-words text-red-500"
+          >{{ updateState.message }}</p>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* 在线更新浮窗：淡入 + 轻微下移入场动画 */
+.update-pop-enter-active,
+.update-pop-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.update-pop-enter-from,
+.update-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+</style>

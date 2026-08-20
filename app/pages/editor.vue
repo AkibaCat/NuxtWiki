@@ -14,8 +14,8 @@ const { t } = useI18n()
 const forbidden = ref(false)
 const canUse = computed(() => [1, 2, 3].includes(user.value?.level ?? 0))
 
-// 工作区：打开的页面标签 + 当前激活标签
-const tabs = ref<{ tag: string; title: string; body: string; comment: string }[]>([])
+// 工作区：打开的页面标签 + 当前激活标签（editorMode 为会话内的编辑器视图状态，不持久化）
+const tabs = ref<{ tag: string; title: string; body: string; style: string; comment: string; editorMode: 'content' | 'style' }[]>([])
 const activeTag = ref('')
 
 onMounted(async () => {
@@ -33,7 +33,9 @@ onMounted(async () => {
         tag: t.tag,
         title: t.title,
         body: t.body,
+        style: t.style ?? '',
         comment: t.comment,
+        editorMode: 'content',
       }))
       lastSaved = JSON.stringify(tabs.value)
       activeTag.value = d.active_tag && tabs.value.some((t) => t.tag === d.active_tag) ? d.active_tag : tabs.value[0]!.tag
@@ -54,7 +56,9 @@ onMounted(async () => {
         tag: t,
         title: exists ? d.page.title : t,
         body: exists ? d.page.body : '',
+        style: exists ? (d.page.style ?? '') : '',
         comment: '',
+        editorMode: 'content',
       })
     }
     if (!activeTab.value && tabs.value.length) activeTag.value = tabs.value[0]!.tag
@@ -116,7 +120,7 @@ const createPage = () => {
   newTag.value = ''
   createModal.value = false
   if (!tabs.value.some((x) => x.tag === tag)) {
-    tabs.value.push({ tag, title: tag, body: '', comment: '' })
+    tabs.value.push({ tag, title: tag, body: '', style: '', comment: '', editorMode: 'content' })
     saveWorkspace()
   }
   activeTag.value = tag
@@ -143,7 +147,9 @@ const confirmOpen = async () => {
       tag,
       title: exists ? d.page.title : tag,
       body: exists ? d.page.body : '',
+      style: exists ? (d.page.style ?? '') : '',
       comment: '',
+      editorMode: 'content',
     })
   }
   if (!activeTab.value) activeTag.value = tabs.value[0]!.tag
@@ -210,7 +216,7 @@ const save = async () => {
     return
   }
   saving.value = true
-  const r = await api.post('page.save', { tag: tab.tag, title: tab.title, body: tab.body, comment: tab.comment })
+  const r = await api.post('page.save', { tag: tab.tag, title: tab.title, body: tab.body, style: tab.style, comment: tab.comment })
   saving.value = false
   if (r.ok) {
     await saveWorkspace()
@@ -229,6 +235,16 @@ const currentPreview = computed(() => {
     return null
   }
 })
+// 页面样式的编译产物（作用域为 .wiki-content），用于预览实时反馈
+const styleCompile = computed(() => compilePageStyleResult(activeTab.value?.style || ''))
+
+// 预览样式标记：用 while 直接写 textContent，确保实时刷新（含改回空串时清空）。
+// 同时监听 previewOn 以保证「已编译好的样式」在首次开启预览时也会写入——
+// <style> 元素仅在预览开启时才挂载成立，仅监听 css 变化会漏掉首次打开的情况。
+const previewStyleEl = ref<any>(null)
+watch(() => [styleCompile.value.css, previewOn.value], () => {
+  if (previewStyleEl.value) previewStyleEl.value.textContent = styleCompile.value.css || ''
+}, { immediate: true, flush: 'post' })
 </script>
 
 <template>
@@ -276,7 +292,7 @@ const currentPreview = computed(() => {
       <div class="flex items-center justify-between gap-2 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-2 py-1.5">
         <div class="flex flex-wrap items-center gap-1">
           <UTooltip v-for="tool in tools" :key="tool.label" :text="t(tool.label)">
-            <UButton :icon="tool.icon" size="xs" color="neutral" variant="subtle" @click="tool.fn((b: string, a = '') => insert(activeTag, b, a))" />
+            <UButton :icon="tool.icon" size="xs" color="neutral" variant="subtle" :disabled="activeTab.editorMode === 'style'" @click="tool.fn((b: string, a = '') => insert(activeTag, b, a))" />
           </UTooltip>
         </div>
         <div class="flex items-center gap-2 shrink-0">
@@ -299,17 +315,28 @@ const currentPreview = computed(() => {
             v-if="activeTab"
             :key="activeTag"
             :model-value="activeTab.body"
+            :style-value="activeTab.style"
+            :mode="activeTab.editorMode"
             :rows="24"
             height="100%"
             :placeholder="t('editor.bodyPlaceholder')"
+            :style-placeholder="t('editor.stylePlaceholder')"
             :corner="previewOn ? 'bottom-left' : 'bottom'"
             class="min-h-0 flex-1"
             @update:model-value="(v: string) => { if (activeTab) activeTab.body = v }"
-            @input="(e: any) => { if (e.target && activeTab) activeTab.body = (e.target as HTMLTextAreaElement).value }"
+            @update:style-value="(v: string) => { if (activeTab) activeTab.style = v }"
+            @update:mode="(v: 'content' | 'style') => { if (activeTab) activeTab.editorMode = v }"
           />
         </div>
-        <div v-if="previewOn" class="w-1/2 min-w-0 overflow-hidden rounded-br-lg border border-(--ui-border) border-l-0">
-          <div class="h-full overflow-y-auto p-5">
+        <div v-if="previewOn" class="w-1/2 min-w-0 flex flex-col overflow-hidden rounded-br-lg border border-(--ui-border) border-l-0">
+          <p
+            v-if="styleCompile.error"
+            class="flex-none border-b border-(--ui-error)/40 bg-(--ui-error)/10 px-3 py-1.5 text-xs text-(--ui-error) break-all"
+          >
+            {{ styleCompile.error }}
+          </p>
+          <component :is="'style'" ref="previewStyleEl"></component>
+          <div class="min-h-0 flex-1 overflow-y-auto p-5">
             <div v-if="currentPreview" class="wiki-content" v-html="currentPreview.html"></div>
           </div>
         </div>

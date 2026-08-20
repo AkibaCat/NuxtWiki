@@ -83,6 +83,7 @@ final class WorkspaceController
             'tag'     => (string)($t['tag'] ?? ''),
             'title'   => (string)($t['title'] ?? ''),
             'body'    => mb_substr((string)($t['body'] ?? ''), 0, 200000),
+            'style'   => mb_substr((string)($t['style'] ?? ''), 0, 200000),
             'comment' => (string)($t['comment'] ?? ''),
         ];
     }

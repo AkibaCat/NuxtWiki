@@ -219,12 +219,16 @@ final class PageController
         $tag = Text::normalizeTag((string)($b['tag'] ?? ''));
         $title = trim((string)($b['title'] ?? ''));
         $body = (string)($b['body'] ?? '');
+        $style = (string)($b['style'] ?? '');
         $comment = trim((string)($b['comment'] ?? ''));
         if ($tag === '' || $title === '') {
             Response::error('页面名和标题不能为空。', 422, 'INVALID_INPUT');
         }
         if (mb_strlen($body, 'UTF-8') > 2 * 1024 * 1024) {
             Response::error('正文过长。', 422, 'INVALID_INPUT');
+        }
+        if (mb_strlen($style, 'UTF-8') > 2 * 1024 * 1024) {
+            Response::error('样式表过长。', 422, 'INVALID_INPUT');
         }
 
         $user = Auth::user(); // 可为 null（匿名，等级允许时）
@@ -247,22 +251,22 @@ final class PageController
             $st = $db->prepare(
                 'INSERT INTO ' . Database::qi('pages')
                 . ' (' . Database::qi('tag') . ', ' . Database::qi('title') . ', ' . Database::qi('body') . ', '
-                . Database::qi('comment') . ', ' . Database::qi('user_id') . ', ' . Database::qi('created_by') . ', '
-                . Database::qi('created_at') . ', ' . Database::qi('updated_at') . ', ' . Database::qi('revision') . ', '
-                . Database::qi('acl_read') . ', ' . Database::qi('acl_edit') . ', ' . Database::qi('acl_history') . ', '
-                . Database::qi('acl_diff') . ', ' . Database::qi('acl_backlinks') . ', ' . Database::qi('acl_acl') . ', '
-                . Database::qi('acl_contributors') . ') '
-                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)'
+                . Database::qi('style') . ', ' . Database::qi('comment') . ', ' . Database::qi('user_id') . ', '
+                . Database::qi('created_by') . ', ' . Database::qi('created_at') . ', ' . Database::qi('updated_at') . ', '
+                . Database::qi('revision') . ', ' . Database::qi('acl_read') . ', ' . Database::qi('acl_edit') . ', '
+                . Database::qi('acl_history') . ', ' . Database::qi('acl_diff') . ', ' . Database::qi('acl_backlinks') . ', '
+                . Database::qi('acl_acl') . ', ' . Database::qi('acl_contributors') . ') '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)'
             );
             $st->execute([
-                $tag, $title, $body, $comment, $userId, $userId,
+                $tag, $title, $body, $style, $comment, $userId, $userId,
                 $now, $now,
                 Settings::defaultLevel('read'), Settings::defaultLevel('edit'), Settings::defaultLevel('history'),
                 Settings::defaultLevel('diff'), Settings::defaultLevel('backlinks'), Settings::defaultLevel('perms'),
                 Settings::defaultLevel('contributors'),
             ]);
             $pageId = Database::lastInsertId();
-            self::insertRevision($pageId, $tag, $title, $body, $comment, $userId, 1, $now);
+            self::insertRevision($pageId, $tag, $title, $body, $style, $comment, $userId, 1, $now);
             Response::data(['created' => true, 'tag' => $tag, 'revision' => 1], 201);
         }
 
@@ -270,11 +274,11 @@ final class PageController
         $newRevision = (int)$page['revision'] + 1;
         $st = $db->prepare(
             'UPDATE ' . Database::qi('pages') . ' SET ' . Database::qi('title') . ' = ?, ' . Database::qi('body') . ' = ?, '
-            . Database::qi('comment') . ' = ?, ' . Database::qi('user_id') . ' = ?, ' . Database::qi('updated_at') . ' = ?, '
-            . Database::qi('revision') . ' = ? WHERE id = ?'
+            . Database::qi('style') . ' = ?, ' . Database::qi('comment') . ' = ?, ' . Database::qi('user_id') . ' = ?, '
+            . Database::qi('updated_at') . ' = ?, ' . Database::qi('revision') . ' = ? WHERE id = ?'
         );
-        $st->execute([$title, $body, $comment, $userId, $now, $newRevision, (int)$page['id']]);
-        self::insertRevision((int)$page['id'], $tag, $title, $body, $comment, $userId, $newRevision, $now);
+        $st->execute([$title, $body, $style, $comment, $userId, $now, $newRevision, (int)$page['id']]);
+        self::insertRevision((int)$page['id'], $tag, $title, $body, $style, $comment, $userId, $newRevision, $now);
 
         Response::data(['created' => false, 'tag' => $tag, 'revision' => $newRevision]);
     }
@@ -370,11 +374,11 @@ final class PageController
 
         $st = Database::pdo()->prepare(
             'UPDATE ' . Database::qi('pages') . ' SET ' . Database::qi('title') . ' = ?, ' . Database::qi('body') . ' = ?, '
-            . Database::qi('comment') . ' = ?, ' . Database::qi('user_id') . ' = ?, ' . Database::qi('updated_at') . ' = ?, '
-            . Database::qi('revision') . ' = ? WHERE id = ?'
+            . Database::qi('style') . ' = ?, ' . Database::qi('comment') . ' = ?, ' . Database::qi('user_id') . ' = ?, '
+            . Database::qi('updated_at') . ' = ?, ' . Database::qi('revision') . ' = ? WHERE id = ?'
         );
-        $st->execute([$target['title'], $target['body'], $comment, (int)$admin['id'], $now, $newRevision, (int)$page['id']]);
-        self::insertRevision((int)$page['id'], $tag, $target['title'], $target['body'], $comment, (int)$admin['id'], $newRevision, $now);
+        $st->execute([$target['title'], $target['body'], $target['style'], $comment, (int)$admin['id'], $now, $newRevision, (int)$page['id']]);
+        self::insertRevision((int)$page['id'], $tag, $target['title'], $target['body'], $target['style'], $comment, (int)$admin['id'], $newRevision, $now);
 
         Response::data(['revision' => $newRevision]);
     }
@@ -548,6 +552,7 @@ final class PageController
             'tag'        => (string)$p['tag'],
             'title'      => (string)$p['title'],
             'body'       => (string)$p['body'],
+            'style'      => (string)($p['style'] ?? ''),
             'comment'    => (string)$p['comment'],
             'revision'   => (int)$p['revision'],
             'hits'       => (int)$p['hits'],
@@ -569,15 +574,16 @@ final class PageController
         ];
     }
 
-    private static function insertRevision(int $pageId, string $tag, string $title, string $body, string $comment, ?int $userId, int $revision, string $now): void
+    private static function insertRevision(int $pageId, string $tag, string $title, string $body, string $style, string $comment, ?int $userId, int $revision, string $now): void
     {
         $st = Database::pdo()->prepare(
             'INSERT INTO ' . Database::qi('revisions')
             . ' (' . Database::qi('page_id') . ', ' . Database::qi('tag') . ', ' . Database::qi('title') . ', '
-            . Database::qi('body') . ', ' . Database::qi('comment') . ', ' . Database::qi('user_id') . ', '
-            . Database::qi('revision') . ', ' . Database::qi('created_at') . ') VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            . Database::qi('body') . ', ' . Database::qi('style') . ', ' . Database::qi('comment') . ', '
+            . Database::qi('user_id') . ', ' . Database::qi('revision') . ', ' . Database::qi('created_at') . ') '
+            . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $st->execute([$pageId, $tag, $title, $body, $comment, $userId, $revision, $now]);
+        $st->execute([$pageId, $tag, $title, $body, $style, $comment, $userId, $revision, $now]);
     }
 
     /** 版本号 => [body, meta]，升序 */
@@ -585,7 +591,7 @@ final class PageController
     {
         $st = Database::pdo()->prepare(
             'SELECT r.' . Database::qi('revision') . ', r.' . Database::qi('title') . ', r.' . Database::qi('comment') . ', '
-            . 'r.' . Database::qi('body') . ', r.' . Database::qi('created_at') . ', r.' . Database::qi('user_id') . ', '
+            . 'r.' . Database::qi('body') . ', r.' . Database::qi('style') . ', r.' . Database::qi('created_at') . ', r.' . Database::qi('user_id') . ', '
             . 'u.' . Database::qi('username') . ', u.' . Database::qi('nickname')
             . ' FROM ' . Database::qi('revisions') . ' r'
             . ' LEFT JOIN ' . Database::qi('users') . ' u ON u.' . Database::qi('id') . ' = r.' . Database::qi('user_id')
@@ -599,6 +605,7 @@ final class PageController
                 'title'      => (string)$r['title'],
                 'comment'    => (string)$r['comment'],
                 'body'       => (string)$r['body'],
+                'style'      => (string)($r['style'] ?? ''),
                 'created_at' => (string)$r['created_at'],
                 'user_id'    => $r['user_id'] !== null ? (int)$r['user_id'] : null,
                 'username'   => $r['username'] !== null ? (string)$r['username'] : null,

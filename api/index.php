@@ -77,5 +77,7 @@ Router::add('GET',  'admin.backup',        AdminController::class, 'backup');
 Router::add('POST', 'admin.restore',       AdminController::class, 'restore');
 Router::add('GET',  'admin.pages',         AdminController::class, 'pages');
 Router::add('GET',  'admin.version-check', AdminController::class, 'versionCheck');
+Router::add('POST', 'admin.update',        AdminController::class, 'update');
+Router::add('GET',  'admin.update-status', AdminController::class, 'updateStatus');
 
 Router::dispatch();

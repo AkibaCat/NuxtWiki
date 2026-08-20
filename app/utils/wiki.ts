@@ -18,7 +18,7 @@
  *   分隔线    --- / *** / ___
  *   内部链接  [[Page]] 或 [[文本|Page]]
  *   外部链接  [文本](url)
- *   自定义高亮 [{文本|颜色}]   颜色支持 6 位十六进制（3c9c5c）、RGB（60:156:92）或 $TC（使用站点主题色）
+ *   自定义颜色 [文本]{颜色*}   颜色*支持 6 位十六进制（3c9c5c）、RGB（60:156:92）、%类名（.class）、$Sass变量；$TC 为内置主题色
  *   容器       ::: 类型 [文本]  以独立成行的 ":::" 结束；类型 info/tip/warning/danger/details
  *   图片附件  ![说明|文件名](文件名.jpg)   或  {{说明|文件名}} / {{文件名}}
  *   HTML     白名单标签（div/section/details/table/span/mark/kbd/sup/sub/a/img/iframe 等），
@@ -284,23 +284,35 @@ const makeTokens = (opts: RenderOptions): InlineToken[] => {
         return `<a href="${esc(att(url))}" class="attachment" download>${parseInline(url, o)}</a>`
       }
     },
-    // 自定义高亮 [{文本|颜色}] —— 颜色支持 6 位十六进制（3c9c5c）、RGB（60:156:92）或 $TC（使用站点主题色）
+    // 自定义颜色/样式 [文本]{颜色*} —— 颜色* 可为：十六进制（3c9c5c / #3c9c5c）、RGB（60:156:92）、
+    //   类引用（%text → class="text"，由页面样式表定义）、Sass 变量引用（$var → var(--var)）。
+    //   $TC 为内置特殊变量（站点主题色），不可在样式编辑器中定义。
     {
-      re: /\[\{([^\]\n]+)\|(#?[0-9a-fA-F]{3,6}|\d{1,3}:\d{1,3}:\d{1,3}|\$[tT][cC])\}\]/,
+      re: /\[([^\]\n]+)\]\{([^}\n]+)\}/,
       render: (m, o) => {
         const text = (m[1] ?? '').trim()
-        const color = (m[2] ?? '').trim()
-        let css = ''
-        if (color.toUpperCase() === '$TC') {
-          css = 'color:var(--ui-primary);'
-        } else if (/^#?[0-9a-fA-F]{3,6}$/.test(color)) {
-          css = `color:${color[0] === '#' ? color : '#' + color};`
-        } else {
-          const [r, g, b] = color.split(':').map(Number)
-          if (r === undefined || g === undefined || b === undefined || r > 255 || g > 255 || b > 255) return m[0]
-          css = `color:rgb(${r},${g},${b});`
+        const arg = (m[2] ?? '').trim()
+        const inner = () => parseInline(text, o)
+        // Sass 变量引用 $name（$TC 内置主题色）
+        const vm = arg.match(/^\$([\w-]+)$/)
+        if (vm) {
+          if ((vm[1] ?? '').toLowerCase() === 'tc') return `<span style="color:var(--ui-primary);">${inner()}</span>`
+          return `<span style="color:var(--${vm[1]});">${inner()}</span>`
         }
-        return `<span style="${css}">${parseInline(text, o)}</span>`
+        // 类引用 %text → class="text"（页面样式表可定义 .text 规则）
+        const cm = arg.match(/^%([A-Za-z_][\w-]*)$/)
+        if (cm) return `<span class="${esc(cm[1]!)}">${inner()}</span>`
+        // 十六进制（支持可省略 #）
+        if (/^#?[0-9a-fA-F]{3,6}$/.test(arg)) {
+          return `<span style="color:${esc(arg[0] === '#' ? arg : '#' + arg)};">${inner()}</span>`
+        }
+        // RGB r:g:b
+        const rm = arg.match(/^(\d{1,3}):(\d{1,3}):(\d{1,3})$/u)
+        if (rm) {
+          const r = Number(rm[1]), g = Number(rm[2]), b = Number(rm[3])
+          if (r <= 255 && g <= 255 && b <= 255) return `<span style="color:rgb(${r},${g},${b});">${inner()}</span>`
+        }
+        return m[0]
       }
     },
     // 内部链接 [[Page]] / [[文本|Page]]

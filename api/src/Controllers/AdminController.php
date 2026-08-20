@@ -321,4 +321,295 @@ final class AdminController
         }
         return '';
     }
+
+    /**
+     * GET admin.update-status —— 读取在线更新进度（供前端轮询，展示右上角浮窗进度）。
+     * 更新过程中各步骤都会把状态写入 data 目录，失败时保留 error 信息。
+     */
+    public static function updateStatus(): never
+    {
+        Auth::requireAdmin();
+        Response::data(self::readUpdateStatus());
+    }
+
+    public static function update(): never
+    {
+        Auth::requireAdmin();
+        Auth::verifyCsrf();
+
+        // 并发防护：已有进行中的更新任务时直接拒绝
+        if ((self::readUpdateStatus()['phase'] ?? '') === 'running') {
+            Response::error('已有更新任务在进行中，请稍后再试。', 409, 'UPDATE_BUSY');
+        }
+
+        $mark = function (string $title, int $percent): void {
+            self::writeUpdateStatus(['phase' => 'running', 'title' => $title, 'percent' => $percent, 'at' => time()]);
+        };
+
+        try {
+            $mark('prepare', 3);
+
+            // 1. 获取最新 Release 产物包（zip 资产）下载地址
+            $release = self::latestReleaseZip();
+            if ($release === null) {
+                throw new RuntimeException('未找到可用的 Release 产物包。');
+            }
+            $version = $release['version'];
+            if ($version !== '' && version_compare($version, NUVTWIKI_VERSION, '<=')) {
+                throw new RuntimeException('当前已是最新版本。');
+            }
+
+            // 2. 下载产物包到 data 目录
+            $dataDir = self::updateDataDir();
+            $zipFile = $dataDir . '/update_package.zip';
+            $mark('download', 15);
+            self::httpDownload($release['url'], $zipFile);
+
+            // 3. 解压到临时目录，自动识别是否套了一层版本目录
+            $extractDir = $dataDir . '/update_package';
+            self::removeRecursive($extractDir);
+            if (!@mkdir($extractDir, 0775, true) && !is_dir($extractDir)) {
+                throw new RuntimeException('无法创建解压目录。');
+            }
+            $mark('extract', 45);
+            self::unzip($zipFile, $extractDir);
+            $srcRoot = self::detectSourceRoot($extractDir);
+
+            // 4. 定位站点根目录（api 目录的上一级）
+            $siteRoot = self::siteRoot();
+            if ($siteRoot === '' || !is_dir($siteRoot)) {
+                throw new RuntimeException('无法定位站点根目录。');
+            }
+
+            // 5. 覆盖部署：_nuxt/_fonts 内置哈希文件名随版本变化，先整体清空再拷入，避免旧文件残留
+            $mark('clean', 60);
+            foreach (['_nuxt', '_fonts'] as $dirName) {
+                self::removeRecursive($siteRoot . DIRECTORY_SEPARATOR . $dirName);
+            }
+
+            // 6. 其余文件整体覆盖（保留运行时文件：config.php / data / uploads）
+            $mark('apply', 70);
+            self::copyTree($srcRoot, $siteRoot, self::preservePaths($siteRoot));
+
+            // 7. 清理临时文件并标记完成；清除版本缓存，下次检查重新拉取
+            @unlink($zipFile);
+            self::removeRecursive($extractDir);
+            $cacheFile = $dataDir . '/version_cache.json';
+            if (is_file($cacheFile)) {
+                @unlink($cacheFile);
+            }
+
+            self::writeUpdateStatus(['phase' => 'done', 'title' => 'done', 'percent' => 100, 'version' => $version, 'at' => time()]);
+            Response::data(['ok' => true, 'version' => $version]);
+        } catch (Throwable $e) {
+            self::writeUpdateStatus(['phase' => 'error', 'title' => 'error', 'percent' => 100, 'message' => $e->getMessage(), 'at' => time()]);
+            Response::error('更新失败：' . $e->getMessage(), 500, 'UPDATE_FAILED');
+        }
+    }
+
+    /** 从 GitHub 最新 Release 中挑选可直接部署的产物包（zip 资产） */
+    private static function latestReleaseZip(): ?array
+    {
+        $data = self::httpGet('https://api.github.com/repos/AkibaCat/NuxtWiki/releases/latest');
+        if ($data === '') {
+            return null;
+        }
+        $rel = json_decode($data, true);
+        if (!is_array($rel)) {
+            return null;
+        }
+        $tag     = (string)($rel['tag_name'] ?? '');
+        $version = preg_replace('/^[vV]/', '', trim($tag));
+        foreach (($rel['assets'] ?? []) as $asset) {
+            if (!is_array($asset)) {
+                continue;
+            }
+            $name = (string)($asset['name'] ?? '');
+            $url  = (string)($asset['browser_download_url'] ?? '');
+            if ($name !== '' && $url !== '' && str_ends_with(strtolower($name), '.zip')) {
+                return ['version' => (string)$version, 'url' => $url];
+            }
+        }
+        return null;
+    }
+
+    /** data 目录（更新包与进度文件的存放位置） */
+    private static function updateDataDir(): string
+    {
+        return rtrim((string)(app_config()['uploads']['data_dir'] ?? (__DIR__ . '/../../data')), '/\\');
+    }
+
+    private static function updateStatusFile(): string
+    {
+        return self::updateDataDir() . '/update_status.json';
+    }
+
+    private static function readUpdateStatus(): array
+    {
+        $file = self::updateStatusFile();
+        if (is_file($file)) {
+            $d = json_decode((string)file_get_contents($file), true);
+            if (is_array($d)) {
+                return $d;
+            }
+        }
+        return ['phase' => 'idle', 'percent' => 0, 'at' => 0];
+    }
+
+    private static function writeUpdateStatus(array $s): void
+    {
+        $file = self::updateStatusFile();
+        $dir  = dirname($file);
+        if (is_dir($dir) && is_writable($dir)) {
+            @file_put_contents($file, json_encode($s, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+    }
+
+    /** 站点根目录 = api 目录的上一级（对应生产部署中 index.html/_nuxt/api 所在目录） */
+    private static function siteRoot(): string
+    {
+        $upDir = rtrim((string)(app_config()['uploads']['dir'] ?? ''), '/\\');
+        if ($upDir === '') {
+            return '';
+        }
+        $root = dirname(dirname($upDir));
+        $real = realpath($root);
+        return $real !== false ? $real : $root;
+    }
+
+    /** 需要保留（不被更新覆盖）的运行时文件，返回按规范化的绝对路径集合 */
+    private static function preservePaths(string $siteRoot): array
+    {
+        $out = [];
+        foreach (['api/config.php', 'api/data', 'api/uploads'] as $rel) {
+            $out[] = self::normPath($siteRoot . '/' . $rel);
+        }
+        return array_values(array_unique($out));
+    }
+
+    private static function normPath(string $p): string
+    {
+        $p = str_replace('\\', '/', $p);
+        $p = (string)preg_replace('#/{2,}#', '/', $p);
+        return rtrim($p, '/');
+    }
+
+    /** 递归删除目录/文件（防止符号链接被误删错删） */
+    private static function removeRecursive(string $path): void
+    {
+        if ($path === '' || $path === '/' || $path === '\\' || $path === DIRECTORY_SEPARATOR) {
+            return;
+        }
+        if (is_link($path)) {
+            @unlink($path);
+            return;
+        }
+        if (!is_dir($path)) {
+            if (is_file($path)) @unlink($path);
+            return;
+        }
+        $items = scandir($path);
+        if ($items === false) return;
+        foreach ($items as $it) {
+            if ($it === '.' || $it === '..') continue;
+            $p = $path . DIRECTORY_SEPARATOR . $it;
+            if (is_dir($p) && !is_link($p)) self::removeRecursive($p);
+            else @unlink($p);
+        }
+        @rmdir($path);
+    }
+
+    /** 递归复制目录并覆盖目标，同时跳过需要保留的路径 */
+    private static function copyTree(string $src, string $dst, array $skip): void
+    {
+        if (!is_dir($src)) return;
+        if (!is_dir($dst)) @mkdir($dst, 0775, true);
+        $items = scandir($src);
+        if ($items === false) return;
+        foreach ($items as $it) {
+            if ($it === '.' || $it === '..') continue;
+            $s = $src . DIRECTORY_SEPARATOR . $it;
+            $d = $dst . DIRECTORY_SEPARATOR . $it;
+            if (in_array(self::normPath($d), $skip, true)) continue;
+            if (is_dir($s) && !is_link($s)) {
+                self::copyTree($s, $d, $skip);
+            } else {
+                @copy($s, $d);
+            }
+        }
+    }
+
+    /** 下载二进制文件到指定路径（跟随重定向，cURL 兜底），失败抛异常 */
+    private static function httpDownload(string $url, string $dest): void
+    {
+        $fp = @fopen($dest, 'wb');
+        if ($fp === false) {
+            throw new RuntimeException('无法创建下载文件。');
+        }
+        $ctx = stream_context_create(['http' => ['timeout' => 180, 'user_agent' => 'NuxtWiki-Updater/1.0']]);
+        $src = @fopen($url, 'rb', false, $ctx);
+        if ($src === false) {
+            fclose($fp);
+            $ok = false;
+            if (function_exists('curl_init')) {
+                $ch = curl_init($url);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT        => 180,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_USERAGENT      => 'NuxtWiki-Updater/1.0',
+                ]);
+                $raw = curl_exec($ch);
+                $err = curl_errno($ch);
+                curl_close($ch);
+                if ($err === 0 && is_string($raw) && $raw !== '') {
+                    @file_put_contents($dest, $raw);
+                    $ok = true;
+                }
+            }
+            if (!$ok) {
+                @unlink($dest);
+                throw new RuntimeException('下载更新包失败：无法连接资源链接。');
+            }
+            return;
+        }
+        stream_copy_to_stream($src, $fp);
+        fclose($src);
+        fclose($fp);
+    }
+
+    /** 解压 zip 更新包（依赖 ZipArchive 扩展） */
+    private static function unzip(string $zip, string $dest): void
+    {
+        if (!class_exists('ZipArchive')) {
+            throw new RuntimeException('服务器环境缺少 ZipArchive 扩展，无法解压更新包。');
+        }
+        $za = new ZipArchive();
+        if ($za->open($zip) !== true) {
+            throw new RuntimeException('更新包损坏，无法解压。');
+        }
+        $za->extractTo($dest);
+        $za->close();
+    }
+
+    /** 解压后若存在单一顶层目录（如版本目录），取其作为源根，否则用解压目录本身 */
+    private static function detectSourceRoot(string $extractDir): string
+    {
+        $items = is_dir($extractDir) ? scandir($extractDir) : false;
+        if (!is_array($items)) {
+            return $extractDir;
+        }
+        $top = [];
+        foreach ($items as $it) {
+            if ($it === '.' || $it === '..') continue;
+            $top[] = $it;
+        }
+        if (count($top) === 1) {
+            $only = $extractDir . DIRECTORY_SEPARATOR . $top[0];
+            if (is_dir($only)) {
+                return $only;
+            }
+        }
+        return $extractDir;
+    }
 }
