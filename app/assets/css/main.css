@@ -30,6 +30,19 @@
 @media (max-width: 1279px) {
   .wiki-content :is(h1, h2, h3, h4, h5, h6)[id] { scroll-margin-top: calc(var(--ui-header-height) + 3rem); }
 }
+/* 标题行右侧「#」跳转标记：指针悬停到标题所在行才显示，点击跳转到该标题 */
+.wiki-content :is(h1, h2, h3, h4, h5, h6) .heading-anchor {
+  opacity: 0;
+  margin-left: 0.35em;
+  color: var(--ui-primary);
+  font-weight: bold;
+  text-decoration: none;
+  user-select: none;
+  transition: opacity .15s;
+}
+.wiki-content :is(h1, h2, h3, h4, h5, h6):hover .heading-anchor {
+  opacity: 1;
+}
 /* 目录跳转后的目标小节高亮：用单一覆盖层盖住整节，消除块间空白缝隙、动画同步连续 */
 .wiki-content.wiki-flash-wrap { position: relative; }
 .toc-flash-overlay {

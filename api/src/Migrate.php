@@ -77,6 +77,29 @@ final class Migrate
                     . ')'
                 );
             }
+            // 3) 编辑锁表（页面并发编辑保护）
+            if ($driver === 'mysql') {
+                $db->exec(
+                    'CREATE TABLE IF NOT EXISTS page_edits ('
+                    . 'tag VARCHAR(191) NOT NULL, '
+                    . 'user_id INT UNSIGNED NOT NULL, '
+                    . 'nickname VARCHAR(64) NOT NULL DEFAULT \'\', '
+                    . 'started_at DATETIME NOT NULL, '
+                    . 'updated_at DATETIME NOT NULL, '
+                    . 'PRIMARY KEY (tag)'
+                    . ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+                );
+            } else {
+                $db->exec(
+                    'CREATE TABLE IF NOT EXISTS page_edits ('
+                    . 'tag TEXT NOT NULL PRIMARY KEY, '
+                    . 'user_id INTEGER NOT NULL, '
+                    . 'nickname TEXT NOT NULL DEFAULT \'\', '
+                    . 'started_at TEXT NOT NULL, '
+                    . 'updated_at TEXT NOT NULL'
+                    . ')'
+                );
+            }
         } catch (Throwable $e) {
             // 迁移失败不阻断主流程（记录日志，交由安装/重建解决）
             error_log('[NuxtWiki] migrate: ' . $e->getMessage());

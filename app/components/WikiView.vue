@@ -109,6 +109,14 @@ const canBacklinks = computed(() => page.value?.can_backlinks)
 const canAcl = computed(() => page.value?.can_acl)
 const canContributors = computed(() => page.value?.can_contributors)
 
+// 编辑保护横幅：页面正被其他用户编辑时，对可编辑者显示提示
+const editLock = computed(() => page.value?.edit_lock)
+const showEditBanner = computed(() => {
+  const l = editLock.value
+  return !!l?.active && !!canEdit.value && l.user_id !== user.value?.id
+})
+const editBannerNickname = computed(() => editLock.value?.nickname || '')
+
 const toggleWatch = async () => {
   if (!user.value) {
     await navigateTo('/login')
@@ -165,6 +173,11 @@ const toggleWatch = async () => {
 
       <!-- 中间：页面标题 + 内容（保持居中） -->
       <article class="min-w-0">
+        <!-- 编辑保护横幅：其他用户正在编辑本页 -->
+        <div v-if="showEditBanner" class="mb-4 flex items-center gap-2 rounded-lg border border-(--ui-warning)/50 bg-(--ui-warning)/10 px-3 py-2 text-sm text-(--ui-warning)">
+          <UIcon name="i-lucide-pencil" class="size-4 shrink-0" />
+          <span>{{ t('wiki.editingBanner', { nickname: editBannerNickname }) }}</span>
+        </div>
         <div class="mb-4">
           <div class="flex items-start justify-between gap-4">
             <h1 class="text-3xl font-bold">{{ page.page.title }}</h1>

@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # ---------- 可覆盖的变量 ----------
-VERSION="v1.3.1"
+VERSION="v1.3.2"
 TIME="${TIME:-$(date +%Y%m%d%H%M)}"
 OUT_DIR="${OUT:-deploy}"
 # 以下三个变量均支持环境变量覆盖（如 CI：export NAME=build-<sha> TARGET=deploy/publish）

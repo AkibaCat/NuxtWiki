@@ -55,6 +55,13 @@ Router::add('POST', 'page.update-acl', PageController::class, 'updateAcl');
 Router::add('POST', 'page.delete',     PageController::class, 'delete');
 Router::add('POST', 'page.revert',     PageController::class, 'revert');
 Router::add('POST', 'page.delete-revision', PageController::class, 'deleteRevision');
+// 编辑锁（页面并发编辑保护）
+Router::add('POST', 'page.lock',   PageController::class, 'lock');
+Router::add('POST', 'page.unlock', PageController::class, 'unlock');
+
+// 工作区（页面编辑器自动保存 / 恢复）
+Router::add('GET',  'workspace.get',  WorkspaceController::class, 'get');
+Router::add('POST', 'workspace.save', WorkspaceController::class, 'save');
 
 // 订阅
 Router::add('GET',  'watch.status', WatchController::class, 'status');
@@ -64,10 +71,6 @@ Router::add('POST', 'watch.remove', WatchController::class, 'remove');
 
 // RSS
 Router::add('GET', 'feed.rss', FeedController::class, 'rss');
-
-// 工作区（沉浸式页面编辑器，仅管理员）
-Router::add('GET',  'workspace.get',   WorkspaceController::class, 'get');
-Router::add('POST', 'workspace.save',  WorkspaceController::class, 'save');
 
 // 管理后台
 Router::add('GET',  'admin.stats',         AdminController::class, 'stats');

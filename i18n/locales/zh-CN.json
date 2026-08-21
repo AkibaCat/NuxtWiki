@@ -58,6 +58,15 @@
     "appearance": "外观",
     "darkMode": "深色模式",
     "darkModeHint": "在浅色与深色显示之间切换",
+    "autosave": {
+      "title": "自动保存工作区",
+      "label": "开启自动保存",
+      "hint": "开启后，页面编辑器中的编辑内容会自动保存并在下次打开时恢复（默认关闭）。"
+    },
+    "groups": {
+      "preferences": "首选项",
+      "theme": "主题"
+    },
     "colors": {
       "sakura": "樱花粉",
       "coral": "珊瑚粉",
@@ -189,7 +198,7 @@
     "socialExternal": "外部社交连接",
     "cropAvatar": "裁剪头像（1:1）",
     "social": {
-      "qq": "QQ 号码",
+      "qq": "QQ号",
       "wechat": "微信号",
       "bilibili": "哔哩哔哩主页链接",
       "youtube": "YouTube 频道链接",
@@ -218,7 +227,8 @@
     "acl": "权限",
     "toc": "本页目录",
     "backToTop": "返回顶部",
-    "noToc": "本页暂无目录"
+    "noToc": "本页暂无目录",
+    "editingBanner": "{nickname}正在编辑该页面"
   },
   "editor": {
     "wrap": "自动换行",
@@ -233,6 +243,7 @@
     },
     "titleRequired": "请填写标题",
     "saveFailed": "保存失败",
+    "lockedTitle": "无法编辑",
     "noPermission": "此功能仅普通用户及以上可用，请先登录。",
     "backToHome": "返回首页",
     "openPage": "打开页面",
@@ -245,6 +256,10 @@
     "saved": "保存成功，是否返回页面查看",
     "savedNo": "否",
     "savedYes": "是",
+    "stay": "返回编辑器",
+    "newCommitTitle": "页面已有新提交",
+    "reloadMessage": "当前页面有其他的新提交，是否重新加载页面？\n重新加载前请确保当前编辑无重要编辑内容",
+    "reload": "重新加载",
     "selectPage": "选择要编辑的页面",
     "noPages": "暂无页面",
     "openSelected": "打开所选页面",

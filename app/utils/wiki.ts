@@ -777,7 +777,7 @@ export const renderWiki = (markup: string, opts: RenderOptions): RenderResult =>
           if (level === 2 || level === 3) {
             toc.push({ id, level, text: inline(pair.inner, opts) })
           }
-          blocks.push(`<h${level}${attrsHtml} id="${id}">${innerHtml}</h${level}>`)
+          blocks.push(`<h${level}${attrsHtml} id="${id}">${innerHtml}<a class="heading-anchor" href="#${id}" aria-hidden="true">#</a></h${level}>`)
         } else {
           blocks.push(`<${tag}${attrsHtml}>${innerHtml}</${tag}>`)
         }
@@ -797,7 +797,7 @@ export const renderWiki = (markup: string, opts: RenderOptions): RenderResult =>
       if (level === 2 || level === 3) {
         toc.push({ id, level, text: inline(raw, opts) })
       }
-      blocks.push(`<h${level} id="${id}">${inline(raw, opts)}</h${level}>`)
+      blocks.push(`<h${level} id="${id}">${inline(raw, opts)}<a class="heading-anchor" href="#${id}" aria-hidden="true">#</a></h${level}>`)
       i++
       continue
     }

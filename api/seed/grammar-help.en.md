@@ -23,16 +23,16 @@
 
 ## [Custom coloring and styles]{%section}
 
-Use the `[text]{color*}` syntax to color text. The `color*` (inside braces) supports **hex**, **RGB**, **class name**, and **Sass variable**:
+Use the `[text]{color*}` syntax to color text. The `color*` (inside braces) supports **hex**, **RGB**, **class name**, and **Scss variable**:
 
 - Hex: `[sample]{3c9c5c}` → [sample]{3c9c5c} (you can also write `[sample]{#3c9c5c}`)
 - RGB: `[sample]{60:156:92}` → [sample]{60:156:92}
 - Class name: `[sample]{%text}` → [sample]{%text} applies the `.text` rule defined in this page's style sheet (`%` is followed by a class name, e.g. `%text` → `.text`)
-- Sass variable: `[sample]{$color}` → [sample]{$color} applies the `$color` variable defined in the page style sheet
+- Scss variable: `[sample]{$color}` → [sample]{$color} applies the `$color` variable defined in the page style sheet
 - Theme color: `[sample]{$TC}` → [sample]{$TC} built-in theme color (`var(--ui-primary)`)
 - Inline syntax still works inside a highlight, e.g. `[**bold**]{$TC}` → [**bold**]{$TC}
 
-> Note: For hex, you may omit the `#` prefix (`3c9c5c` and `#3c9c5c` are equivalent). For RGB, use English colons as separators (red:green:blue), with each value in the range 0–255. `%` is followed by a class name (e.g. `%text` → `.text`) defined in the page style sheet (the "style editor"); `$` is followed by a Sass variable name taken from the page style sheet's top-level variables; `$TC` is a built-in special variable (the site theme color `var(--ui-primary)`) that cannot be customized by the style editor.
+> Note: For hex, you may omit the `#` prefix (`3c9c5c` and `#3c9c5c` are equivalent). For RGB, use English colons as separators (red:green:blue), with each value in the range 0–255. `%` is followed by a class name (e.g. `%text` → `.text`) defined in the page style sheet (the "style editor"); `$` is followed by a Scss variable name taken from the page style sheet's top-level variables; `$TC` is a built-in special variable (the site theme color `var(--ui-primary)`) that cannot be customized by the style editor.
 
 ## Lists
 

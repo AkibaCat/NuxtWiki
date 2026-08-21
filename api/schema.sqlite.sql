@@ -75,6 +75,14 @@ CREATE TABLE IF NOT EXISTS regcodes (
 );
 CREATE INDEX IF NOT EXISTS idx_regcodes_user ON regcodes (user_id);
 
+CREATE TABLE IF NOT EXISTS page_edits (
+  tag        TEXT NOT NULL PRIMARY KEY,
+  user_id    INTEGER NOT NULL,
+  nickname   TEXT NOT NULL DEFAULT '',
+  started_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   skey   TEXT NOT NULL PRIMARY KEY,
   svalue TEXT NULL

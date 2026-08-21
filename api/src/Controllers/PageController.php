@@ -60,7 +60,73 @@ final class PageController
             'is_admin'        => Auth::isAdmin(),
             'contributors'    => self::contributors((int)$page['id']),
             'subscriber_count'=> self::subscriberCount((int)$page['id']),
+            'edit_lock'       => self::editLock($tag),
         ]);
+    }
+
+    /** POST page.lock —— 获取 / 续期页面编辑锁（他人持锁时返回 423） */
+    public static function lock(): never
+    {
+        $user = Auth::requireActive();
+        Auth::verifyCsrf();
+        $b = Response::body();
+        $tag = Text::normalizeTag((string)($b['tag'] ?? ''));
+        if ($tag === '') {
+            Response::error('缺少页面名。', 422, 'INVALID_INPUT');
+        }
+        $now = Database::now();
+        $nickname = trim((string)($user['nickname'] ?? ''));
+        if ($nickname === '') {
+            $nickname = (string)($user['username'] ?? '');
+        }
+        $db = Database::pdo();
+        $existing = self::findEditLock($tag);
+        if ($existing !== null) {
+            if ((int)$existing['user_id'] === (int)$user['id']) {
+                // 自己持有：刷新心跳
+                $st = $db->prepare(
+                    'UPDATE ' . Database::qi('page_edits') . ' SET ' . Database::qi('updated_at') . ' = ? WHERE ' . Database::qi('tag') . ' = ?'
+                );
+                $st->execute([$now, $tag]);
+                Response::data(['locked' => true, 'editor' => $nickname]);
+            }
+            if (self::isLockActive($existing)) {
+                // 他人持锁且未过期：拒绝
+                Response::error('此页面正在由' . (string)$existing['nickname'] . '编辑，请等待其他用户编辑完成。', 423, 'PAGE_LOCKED');
+            }
+            // 锁已过期：接管
+            $st = $db->prepare(
+                'UPDATE ' . Database::qi('page_edits') . ' SET ' . Database::qi('user_id') . ' = ?, '
+                . Database::qi('nickname') . ' = ?, ' . Database::qi('updated_at') . ' = ? WHERE ' . Database::qi('tag') . ' = ?'
+            );
+            $st->execute([(int)$user['id'], $nickname, $now, $tag]);
+            Response::data(['locked' => true, 'editor' => $nickname]);
+        }
+        // 无锁：新建
+        $st = $db->prepare(
+            'INSERT INTO ' . Database::qi('page_edits')
+            . ' (' . Database::qi('tag') . ', ' . Database::qi('user_id') . ', ' . Database::qi('nickname') . ', '
+            . Database::qi('started_at') . ', ' . Database::qi('updated_at') . ') VALUES (?, ?, ?, ?, ?)'
+        );
+        $st->execute([$tag, (int)$user['id'], $nickname, $now, $now]);
+        Response::data(['locked' => true, 'editor' => $nickname]);
+    }
+
+    /** POST page.unlock —— 释放本人持有的页面编辑锁 */
+    public static function unlock(): never
+    {
+        Auth::requireActive();
+        Auth::verifyCsrf();
+        $b = Response::body();
+        $tag = Text::normalizeTag((string)($b['tag'] ?? ''));
+        if ($tag === '') {
+            Response::data(['ok' => true]);
+        }
+        $st = Database::pdo()->prepare(
+            'DELETE FROM ' . Database::qi('page_edits') . ' WHERE ' . Database::qi('tag') . ' = ? AND ' . Database::qi('user_id') . ' = ?'
+        );
+        $st->execute([$tag, (int)Auth::user()['id']]);
+        Response::data(['ok' => true]);
     }
 
     /** GET page.list —— 全部页面 */
@@ -246,6 +312,12 @@ final class PageController
         $now = Database::now();
         $userId = $user !== null ? (int)$user['id'] : null;
 
+        // 编辑保护：页面正被其他用户编辑时，保存操作同样被锁定（含管理员）
+        $lock = self::editLock($tag);
+        if ($lock['active'] && $lock['user_id'] !== $userId) {
+            Response::error('此页面正在由' . $lock['nickname'] . '编辑，请等待其他用户编辑完成。', 423, 'PAGE_LOCKED');
+        }
+
         // 新建页面：插入页面记录并写入首个修订（revision=1）
         if ($page === null) {
             $st = $db->prepare(
@@ -267,7 +339,7 @@ final class PageController
             ]);
             $pageId = Database::lastInsertId();
             self::insertRevision($pageId, $tag, $title, $body, $style, $comment, $userId, 1, $now);
-            Response::data(['created' => true, 'tag' => $tag, 'revision' => 1], 201);
+            Response::data(['created' => true, 'tag' => $tag, 'revision' => 1, 'updated_at' => $now], 201);
         }
 
         // 更新现有页面：递增修订号并写入新修订
@@ -280,7 +352,7 @@ final class PageController
         $st->execute([$title, $body, $style, $comment, $userId, $now, $newRevision, (int)$page['id']]);
         self::insertRevision((int)$page['id'], $tag, $title, $body, $style, $comment, $userId, $newRevision, $now);
 
-        Response::data(['created' => false, 'tag' => $tag, 'revision' => $newRevision]);
+        Response::data(['created' => false, 'tag' => $tag, 'revision' => $newRevision, 'updated_at' => $now]);
     }
 
     /** POST page.update-acl */
@@ -520,6 +592,42 @@ final class PageController
         $st->execute([$tag]);
         $row = $st->fetch();
         return $row === false ? null : $row;
+    }
+
+    /** 编辑锁有效期（秒）：前端每 30s 心跳一次，超时视为放弃 */
+    private const LOCK_TTL = 90;
+
+    /** 查询某页面的编辑锁记录 */
+    private static function findEditLock(string $tag): ?array
+    {
+        $st = Database::pdo()->prepare('SELECT * FROM ' . Database::qi('page_edits') . ' WHERE ' . Database::qi('tag') . ' = ?');
+        $st->execute([$tag]);
+        $row = $st->fetch();
+        return $row === false ? null : $row;
+    }
+
+    /** 编辑锁是否仍在有效期内 */
+    private static function isLockActive(array $lock): bool
+    {
+        $updated = strtotime((string)$lock['updated_at']);
+        if ($updated === false) {
+            return false;
+        }
+        return (time() - $updated) < self::LOCK_TTL;
+    }
+
+    /** 对外编辑锁状态（仅返回有效锁） */
+    private static function editLock(string $tag): array
+    {
+        $lock = self::findEditLock($tag);
+        if ($lock === null || !self::isLockActive($lock)) {
+            return ['active' => false, 'user_id' => null, 'nickname' => null];
+        }
+        return [
+            'active'   => true,
+            'user_id'  => (int)$lock['user_id'],
+            'nickname' => (string)$lock['nickname'],
+        ];
     }
 
     /** 对外页面负载 */

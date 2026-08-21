@@ -135,7 +135,7 @@ const fetchUpdateStatus = async () => {
     versionInfo.value = { ...(versionInfo.value || {}), current_version: updateState.version }
     toast.add({ title: t('admin.update.done', { version: updateState.version }), color: 'success' })
     // 更新完成后自动跳回首页（组件已按新版本替换，需强制刷新以加载最新资源）
-    setTimeout(() => { navigateTo('/', { reload: true }) }, 1200)
+    setTimeout(() => { window.location.href = '/' }, 1200)
   } else if (s.phase === 'error') {
     stopUpdatePoll()
     toast.add({ title: t('admin.update.fail'), description: updateState.message, color: 'error' })

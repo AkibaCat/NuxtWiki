@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 沉浸式全屏页面编辑器，使用默认布局（保留顶部导航栏）。
-// 顶部一行显示已打开页面标签；工具栏显示页面名/标题 + 快捷语法 + 保存/预览；
-// 离开自动保存工作区（后端持久化），再次打开自动恢复。
+// 顶部一行显示已打开页面标签（未保存编辑以 * 标记）；工具栏显示页面名/标题 + 快捷语法 + 保存/预览。
+// 打开页面进入编辑即获取编辑锁（防止他人并发编辑），离开编辑器自动释放。
+// 开启「自动保存工作区」后，编辑内容自动保存到后端工作区并在下次打开时恢复。
 
 const api = useApi()
 const { user, ready, site, init } = useAuth()
@@ -14,8 +15,13 @@ const { t } = useI18n()
 const forbidden = ref(false)
 const canUse = computed(() => [1, 2, 3].includes(user.value?.level ?? 0))
 
-// 工作区：打开的页面标签 + 当前激活标签（editorMode 为会话内的编辑器视图状态，不持久化）
-const tabs = ref<{ tag: string; title: string; body: string; style: string; comment: string; editorMode: 'content' | 'style' }[]>([])
+// ==================== 自动保存工作区开关 ====================
+const { enabled: autosave } = useEditorAutosave()
+
+// 已打开的页面标签 + 当前激活标签（editorMode 为会话内的编辑器视图状态，不持久化）
+// dirty：自上次保存到页面后是否有未保存编辑；baseUpdatedAt：内容加载进编辑器时的服务器时间（用于检测他人新提交）
+// saved*：上次保存 / 加载时的内容快照，用于判断编辑是否已撤销回原样（一致则清除 dirty）
+const tabs = ref<{ tag: string; title: string; body: string; style: string; comment: string; editorMode: 'content' | 'style'; dirty: boolean; baseUpdatedAt: string; savedTitle: string; savedBody: string; savedStyle: string }[]>([])
 const activeTag = ref('')
 
 onMounted(async () => {
@@ -24,63 +30,226 @@ onMounted(async () => {
     forbidden.value = true
     return
   }
-  // 恢复工作区
-  const r = await api.get('workspace.get')
-  if (r.ok) {
-    const d = r.data as any
-    if (d?.tabs?.length) {
-      tabs.value = (d.tabs as any[]).map((t) => ({
-        tag: t.tag,
-        title: t.title,
-        body: t.body,
-        style: t.style ?? '',
-        comment: t.comment,
-        editorMode: 'content',
-      }))
-      lastSaved = JSON.stringify(tabs.value)
-      activeTag.value = d.active_tag && tabs.value.some((t) => t.tag === d.active_tag) ? d.active_tag : tabs.value[0]!.tag
-    }
+  // 开启自动保存时恢复上次的工作区草稿
+  if (autosave.value) {
+    await restoreWorkspace()
   }
-  // 支持通过 ?open=标签 直接加入工作区（页面点“编辑”跳转至此）
+  // 支持通过 ?open=标签 直接打开页面编辑（页面点“编辑”跳转至此）
   const openParam = route.query.open
   const raw = typeof openParam === 'string' ? [openParam] : Array.isArray(openParam) ? openParam : []
   const toOpen = raw.filter((v): v is string => v != null)
+  for (const tag of toOpen) {
+    await openTag(decodeURIComponent(tag))
+  }
+  if (!activeTab.value && tabs.value.length) activeTag.value = tabs.value[0]!.tag
   if (toOpen.length) {
-    for (const tag of toOpen) {
-      const t = decodeURIComponent(tag)
-      if (!t || tabs.value.some((x) => x.tag === t)) continue
-      const rr = await api.get('page.get', { tag: t })
-      const d = rr.data as any
-      const exists = rr.ok && d?.exists
-      tabs.value.push({
-        tag: t,
-        title: exists ? d.page.title : t,
-        body: exists ? d.page.body : '',
-        style: exists ? (d.page.style ?? '') : '',
-        comment: '',
-        editorMode: 'content',
-      })
-    }
-    if (!activeTab.value && tabs.value.length) activeTag.value = tabs.value[0]!.tag
     // 清理 query，避免刷新后重复添加
     await navigateTo('/editor', { replace: true })
   }
 })
-onBeforeUnmount(() => {
+
+// 浏览器刷新 / 关闭：自动保存工作区草稿（开启自动保存时），不再弹窗拦截
+const beforeUnload = () => {
   saveWorkspace()
+}
+onMounted(() => window.addEventListener('beforeunload', beforeUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', beforeUnload)
+  saveWorkspace()
+  releaseAllLocks()
 })
 
-// ==================== 工作区自动保存 ====================
-let lastSaved = ''
-const saveWorkspace = async () => {
-  const current = JSON.stringify(tabs.value)
-  if (current === lastSaved) return
-  await api.post('workspace.save', { active_tag: activeTag.value, tabs: tabs.value })
-  lastSaved = current
+// ==================== 工作区（自动保存 / 恢复） ====================
+const restoreWorkspace = async () => {
+  const r = await api.get('workspace.get')
+  if (!r.ok) return
+  const d = r.data as any
+  if (!d?.tabs?.length) return
+  const restored = (d.tabs as any[]).map((tab) => ({
+    tag: tab.tag,
+    title: tab.title,
+    body: tab.body,
+    style: tab.style ?? '',
+    comment: tab.comment ?? '',
+    editorMode: 'content' as const,
+    dirty: false,
+    baseUpdatedAt: tab.baseUpdatedAt ?? '',
+    // saved* 先留空，恢复后拉取服务器内容再比对，正确判定「未保存到页面的编辑」
+    savedTitle: '',
+    savedBody: '',
+    savedStyle: '',
+  }))
+  // 恢复前先获取编辑锁：他人正编辑的页面跳过恢复
+  const kept: typeof tabs.value = []
+  for (const tab of restored) {
+    if (await acquireLock(tab.tag)) kept.push(tab)
+  }
+  tabs.value = kept
+  if (!kept.length) return
+  activeTag.value = d.active_tag && kept.some((t) => t.tag === d.active_tag) ? d.active_tag : kept[0]!.tag
+  // 逐个拉取服务器页面内容：与工作区内容比对判定「未保存编辑」（脏，显示 *）；
+  // 同时检测草稿保存后是否有他人新提交（逐个询问）。
+  const queued: string[] = []
+  for (const tab of [...tabs.value]) {
+    const pr = await api.get('page.get', { tag: tab.tag })
+    const pd = pr.data as any
+    if (pr.ok && pd?.exists) {
+      tab.savedTitle = pd.page.title ?? ''
+      tab.savedBody = pd.page.body ?? ''
+      tab.savedStyle = pd.page.style ?? ''
+      if (tab.baseUpdatedAt && toTime(pd.page.updated_at) > toTime(tab.baseUpdatedAt)) {
+        queued.push(tab.tag)
+      }
+    } else {
+      // 页面尚不存在（新建草稿）：基线为空页面
+      tab.savedTitle = tab.tag
+      tab.savedBody = ''
+      tab.savedStyle = ''
+    }
+    // 工作区内容与已保存内容不一致 → 未保存到页面的编辑，显示 *
+    tab.dirty = tab.title !== tab.savedTitle || tab.body !== tab.savedBody || tab.style !== tab.savedStyle
+  }
+  reloadQueue.value = queued
+  nextConflict()
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+const saveWorkspace = () => {
+  if (!autosave.value) return
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  api.post('workspace.save', { active_tag: activeTag.value, tabs: tabs.value }).catch(() => {})
+}
+const scheduleAutosave = () => {
+  if (!autosave.value) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    saveWorkspace()
+  }, 800)
+}
+
+// ==================== 编辑锁（页面并发编辑保护） ====================
+// 打开页面进入编辑即获取编辑锁；他人持锁时禁止打开并弹窗提示。
+// 持有期间每 30s 心跳续期；关闭标签或离开编辑器时释放（异常退出由服务端 90s 超时兜底）。
+const lockHeld = new Set<string>()
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+const lockModal = ref(false)
+const lockMessage = ref('')
+
+const releaseLock = (tag: string) => {
+  if (!lockHeld.has(tag)) return
+  lockHeld.delete(tag)
+  api.post('page.unlock', { tag }).catch(() => {})
+}
+const releaseAllLocks = () => {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+  const tags = [...lockHeld]
+  lockHeld.clear()
+  for (const tag of tags) {
+    api.post('page.unlock', { tag }).catch(() => {})
+  }
+}
+const startHeartbeat = () => {
+  if (heartbeatTimer) return
+  heartbeatTimer = setInterval(() => {
+    for (const tag of [...lockHeld]) {
+      api.post('page.lock', { tag }).catch(() => {})
+    }
+  }, 30000)
+}
+const acquireLock = async (tag: string): Promise<boolean> => {
+  const r = await api.post('page.lock', { tag })
+  if (r.ok) {
+    lockHeld.add(tag)
+    startHeartbeat()
+    return true
+  }
+  if (r.error?.code === 'PAGE_LOCKED') {
+    lockMessage.value = r.error.message
+    lockModal.value = true
+  }
+  return false
+}
+const openTag = async (tag: string) => {
+  if (!tag || tabs.value.some((x) => x.tag === tag)) return
+  const r = await api.get('page.get', { tag })
+  const d = r.data as any
+  const exists = r.ok && d?.exists
+  if (!(await acquireLock(tag))) return
+  tabs.value.push({
+    tag,
+    title: exists ? d.page.title : tag,
+    body: exists ? d.page.body : '',
+    style: exists ? (d.page.style ?? '') : '',
+    comment: '',
+    editorMode: 'content',
+    dirty: false,
+    baseUpdatedAt: exists ? (d.page.updated_at ?? '') : '',
+    savedTitle: exists ? d.page.title : tag,
+    savedBody: exists ? d.page.body : '',
+    savedStyle: exists ? (d.page.style ?? '') : '',
+  })
 }
 
 // ==================== 标签管理 ====================
 const activeTab = computed(() => tabs.value.find((t) => t.tag === activeTag.value) || null)
+
+// 标记某标签已修改：按与已保存快照的比对结果刷新 dirty，并（开启自动保存时）延迟写入工作区
+const markDirty = (tab: { title: string; body: string; style: string; savedTitle: string; savedBody: string; savedStyle: string; dirty: boolean } | null | undefined) => {
+  if (!tab) return
+  tab.dirty = tab.title !== tab.savedTitle || tab.body !== tab.savedBody || tab.style !== tab.savedStyle
+  scheduleAutosave()
+}
+
+// 切换页面（标签）
+const switchTab = (tag: string) => {
+  if (tag !== activeTag.value) activeTag.value = tag
+}
+
+// ==================== 工作区恢复后的「他人新提交」检测 ====================
+const reloadQueue = ref<string[]>([])
+const reloadModal = ref(false)
+const conflictTag = ref('')
+const toTime = (s: string) => {
+  const n = Date.parse(String(s).trim().replace(' ', 'T'))
+  return Number.isNaN(n) ? 0 : n
+}
+const nextConflict = () => {
+  if (!reloadQueue.value.length) return
+  conflictTag.value = reloadQueue.value.shift()!
+  reloadModal.value = true
+}
+const confirmReload = async () => {
+  reloadModal.value = false
+  const tag = conflictTag.value
+  conflictTag.value = ''
+  const tab = tabs.value.find((x) => x.tag === tag)
+  if (!tab) return
+  const r = await api.get('page.get', { tag })
+  const d = r.data as any
+  if (r.ok && d?.exists) {
+    tab.title = d.page.title
+    tab.body = d.page.body
+    tab.style = d.page.style ?? ''
+    tab.dirty = false
+    tab.baseUpdatedAt = d.page.updated_at ?? ''
+    tab.savedTitle = d.page.title
+    tab.savedBody = d.page.body
+    tab.savedStyle = d.page.style ?? ''
+  }
+  nextConflict()
+}
+const cancelReload = () => {
+  reloadModal.value = false
+  conflictTag.value = ''
+  nextConflict()
+}
 
 // ==================== <title> 动态标题（写入全局覆盖，由布局统一输出） ====================
 const siteName = computed(() => site.value?.name || 'NuxtWiki')
@@ -114,15 +283,18 @@ const openPicker = async () => {
 // ==================== 创建新页面 ====================
 const createModal = ref(false)
 const newTag = ref('')
-const createPage = () => {
+const createPage = async () => {
   const tag = newTag.value.trim()
   if (!tag) return
   newTag.value = ''
   createModal.value = false
-  if (!tabs.value.some((x) => x.tag === tag)) {
-    tabs.value.push({ tag, title: tag, body: '', style: '', comment: '', editorMode: 'content' })
-    saveWorkspace()
+  if (tabs.value.some((x) => x.tag === tag)) {
+    activeTag.value = tag
+    return
   }
+  // 新建页面同样获取编辑锁，防止他人并发创建同一页面
+  if (!(await acquireLock(tag))) return
+  tabs.value.push({ tag, title: tag, body: '', style: '', comment: '', editorMode: 'content', dirty: false, baseUpdatedAt: '', savedTitle: tag, savedBody: '', savedStyle: '' })
   activeTag.value = tag
 }
 
@@ -137,22 +309,11 @@ const confirmOpen = async () => {
     openModal.value = false
     return
   }
-  // 逐个拉取内容加入标签（页面不存在则以 tag 名为标题，空内容可创建）
+  // 逐个拉取内容并获取编辑锁加入标签（页面不存在则以 tag 名为标题，空内容可创建）
   for (const tag of toOpen) {
-    const r = await api.get('page.get', { tag })
-    const d = r.data as any
-    const exists = r.ok && d?.exists
-    if (tabs.value.some((x) => x.tag === tag)) continue
-    tabs.value.push({
-      tag,
-      title: exists ? d.page.title : tag,
-      body: exists ? d.page.body : '',
-      style: exists ? (d.page.style ?? '') : '',
-      comment: '',
-      editorMode: 'content',
-    })
+    await openTag(tag)
   }
-  if (!activeTab.value) activeTag.value = tabs.value[0]!.tag
+  if (!activeTab.value && tabs.value.length) activeTag.value = tabs.value[0]!.tag
   openModal.value = false
 }
 const closeTab = (tag: string) => {
@@ -163,6 +324,8 @@ const closeTab = (tag: string) => {
     const next = tabs.value[i] || tabs.value[i - 1]
     activeTag.value = next ? next.tag : ''
   }
+  releaseLock(tag)
+  scheduleAutosave()
 }
 
 // ==================== 工具栏 ====================
@@ -176,7 +339,10 @@ const insert = (tag: string, before: string, after = '') => {
   const end = el?.selectionEnd ?? val.length
   const hasSel = el ? start !== end : false
   const content = hasSel ? val.slice(start, end) : after !== '' ? t('editor.placeholder.text') : ''
-  if (tab) tab.body = val.slice(0, start) + before + content + after + val.slice(end)
+  if (tab) {
+    tab.body = val.slice(0, start) + before + content + after + val.slice(end)
+    markDirty(tab)
+  }
   requestAnimationFrame(() => {
     const t = getTextarea(tag)
     if (t) {
@@ -219,7 +385,11 @@ const save = async () => {
   const r = await api.post('page.save', { tag: tab.tag, title: tab.title, body: tab.body, style: tab.style, comment: tab.comment })
   saving.value = false
   if (r.ok) {
-    await saveWorkspace()
+    tab.dirty = false
+    tab.savedTitle = tab.title
+    tab.savedBody = tab.body
+    tab.savedStyle = tab.style
+    if (r.data?.updated_at) tab.baseUpdatedAt = r.data.updated_at
     savedTag.value = tab.tag
     saveModal.value = true
   } else {
@@ -255,7 +425,7 @@ watch(() => [styleCompile.value.css, previewOn.value], () => {
     <UButton to="/" color="neutral" variant="subtle" :label="t('editor.backToHome')" />
   </div>
   <div v-else class="flex flex-col" style="height: calc(100dvh - 9rem)">
-    <!-- 顶部一行：已打开页面标签 -->
+    <!-- 顶部一行：已打开页面标签（未保存以 * 标记） -->
     <div class="flex items-center gap-1 overflow-x-auto border-b border-(--ui-border) bg-(--ui-bg-elevated) px-2 py-1.5">
       <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-folder-open" :label="t('editor.openPage')" @click="openPicker" />
       <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-file-plus-2" :label="t('editor.createPage')" @click="createModal = true" />
@@ -266,9 +436,10 @@ watch(() => [styleCompile.value.css, previewOn.value], () => {
           size="xs"
           :color="tab.tag === activeTag ? 'primary' : 'neutral'"
           :variant="tab.tag === activeTag ? 'soft' : 'ghost'"
-          @click="activeTag = tab.tag"
+          @click="switchTab(tab.tag)"
         >
           <span class="max-w-40 truncate">{{ tab.tag }}</span>
+          <span v-if="tab.dirty" class="text-(--ui-warning)">*</span>
           <UIcon name="i-lucide-x" class="size-3 shrink-0" @click.stop="closeTab(tab.tag)" />
         </UButton>
       </template>
@@ -286,7 +457,13 @@ watch(() => [styleCompile.value.css, previewOn.value], () => {
       <!-- 工具栏一行：页面名 + 页面标题 -->
       <div class="flex items-center gap-3 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2">
         <span class="text-xs font-semibold text-(--ui-muted) shrink-0">{{ activeTag }}</span>
-        <UInput v-model="activeTab.title" size="sm" class="w-full" :placeholder="t('editor.pageTitle')" />
+        <UInput
+          :model-value="activeTab.title"
+          size="sm"
+          class="w-full"
+          :placeholder="t('editor.pageTitle')"
+          @update:model-value="(v: string | null) => { if (activeTab && v != null) { activeTab.title = v; markDirty(activeTab) } }"
+        />
       </div>
       <!-- 工具栏二行：左快捷语法，右保存/预览 -->
       <div class="flex items-center justify-between gap-2 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-2 py-1.5">
@@ -323,8 +500,8 @@ watch(() => [styleCompile.value.css, previewOn.value], () => {
             :style-placeholder="t('editor.stylePlaceholder')"
             :corner="previewOn ? 'bottom-left' : 'bottom'"
             class="min-h-0 flex-1"
-            @update:model-value="(v: string) => { if (activeTab) activeTab.body = v }"
-            @update:style-value="(v: string) => { if (activeTab) activeTab.style = v }"
+            @update:model-value="(v: string) => { if (activeTab) { activeTab.body = v; markDirty(activeTab) } }"
+            @update:style-value="(v: string) => { if (activeTab) { activeTab.style = v; markDirty(activeTab) } }"
             @update:mode="(v: 'content' | 'style') => { if (activeTab) activeTab.editorMode = v }"
           />
         </div>
@@ -352,6 +529,45 @@ watch(() => [styleCompile.value.css, previewOn.value], () => {
             <div class="flex items-center justify-end gap-2">
               <UButton variant="subtle" color="neutral" @click="saveModal = false">{{ t('editor.savedNo') }}</UButton>
               <UButton :label="t('editor.savedYes')" @click="saveModal = false; navigateTo(`/${savedTag}`)" />
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
+
+    <!-- 页面存在他人新提交：重新加载确认弹窗（橙色） -->
+    <UModal v-model:open="reloadModal">
+      <template #content>
+        <UCard :ui="{ header: 'border-b border-(--ui-warning)/40' }">
+          <template #header>
+            <div class="flex items-center gap-2 text-(--ui-warning)">
+              <UIcon name="i-lucide-refresh-cw" class="size-5 shrink-0" />
+              <span class="font-semibold">{{ t('editor.newCommitTitle') }}</span>
+            </div>
+          </template>
+          <p class="whitespace-pre-line py-2 text-sm text-(--ui-text)">{{ t('editor.reloadMessage') }}</p>
+          <template #footer>
+            <div class="flex items-center justify-end gap-2">
+              <UButton color="neutral" variant="subtle" @click="cancelReload">{{ t('editor.stay') }}</UButton>
+              <UButton color="warning" @click="confirmReload">{{ t('editor.reload') }}</UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
+
+    <!-- 页面正被他人编辑弹窗 -->
+    <UModal v-model:open="lockModal">
+      <template #content>
+        <UCard>
+          <template #header>{{ t('editor.lockedTitle') }}</template>
+          <p class="flex items-start gap-2 py-2 text-sm text-(--ui-text)">
+            <UIcon name="i-lucide-lock" class="mt-0.5 size-5 shrink-0 text-(--ui-warning)" />
+            <span class="break-words">{{ lockMessage }}</span>
+          </p>
+          <template #footer>
+            <div class="flex items-center justify-end">
+              <UButton :label="t('common.ok')" @click="lockModal = false" />
             </div>
           </template>
         </UCard>

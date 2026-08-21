@@ -5,7 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { sass } from '@codemirror/lang-sass'
 import { HighlightStyle, indentOnInput, indentUnit, syntaxHighlighting } from '@codemirror/language'
 import { Compartment, EditorState } from '@codemirror/state'
-import { drawSelection, dropCursor, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, placeholder, rectangularSelection } from '@codemirror/view'
+import { drawSelection, dropCursor, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, placeholder as placeholderExt, rectangularSelection } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 
 // 样式编辑器语法高亮：VSCode 配色（Light+ / Dark+）。
@@ -30,7 +30,8 @@ const editorHighlight = HighlightStyle.define([
 
 // 样式编辑器基础主题：统一字体栈 + 随应用主题（亮/暗）联动的光标、选区、行号配色。
 // 颜色引用 CSS 变量（--ui-* / --tok-*），切换主题时无需重建编辑器。
-const editorTheme = EditorView.theme({
+// 注意：主题的亮/暗标记在 setup 中按 colorMode 动态构建（见 buildEditorTheme）。
+const editorThemeSpec = {
   '&': { height: '100%', backgroundColor: 'var(--ui-bg)' },
   '.cm-scroller': { fontFamily: "Consolas, 'Courier New', monospace", fontSize: '14px', lineHeight: '22px' },
   '.cm-content': { fontFamily: "Consolas, 'Courier New', monospace", fontSize: '14px', lineHeight: '22px', color: 'var(--ui-text)', caretColor: 'var(--ui-text)' },
@@ -39,8 +40,11 @@ const editorTheme = EditorView.theme({
   '.cm-lineNumbers .cm-gutterElement': { color: 'var(--ui-text-muted)' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--ui-text)' },
   '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--ui-primary) 7%, transparent)' },
-  '.cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--ui-primary) 22%, transparent)' },
-  '&.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--ui-primary) 22%, transparent)' },
+  // 选区背景：与编辑器底色混合成不透明色（而非叠加半透明色），并加 !important 覆盖 CodeMirror 基座主题。
+  // 基座主题在暗色应用下仍按 light 模式给选区用亮色（#d7d4f0/#d9d9d9），半透明色无法覆盖，
+  // 且会让原生高亮透出，造成暗色主题下选区“过亮 / 两种颜色叠加”。
+  '.cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--ui-primary) 22%, var(--ui-bg)) !important' },
+  '&.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in srgb, var(--ui-primary) 22%, var(--ui-bg)) !important' },
   // —— 补全下拉框（autocompletion tooltip）美化 ——
   '& .cm-tooltip-autocomplete': {
     border: '1px solid var(--ui-border)',
@@ -67,11 +71,28 @@ const editorTheme = EditorView.theme({
     backgroundColor: 'color-mix(in srgb, var(--ui-primary) 14%, transparent)',
     color: 'var(--ui-text)',
   },
-})
+}
 // 带行号的 Markdown 编辑器（行号栏 + 自动换行开关 + 原生 textarea）。
 // 支持「内容编辑器 / 样式编辑器」双模式：内容为 Markdown 正文，样式为页面 SCSS 样式表。
 // 通过 defineExpose 暴露 textarea / 当前模式，供外部插入、光标操作与工具条联动。
 const { t } = useI18n()
+const colorMode = useColorMode()
+
+// 样式编辑器主题按当前明暗模式动态构建（dark 标记随应用主题联动）。
+// 关键点：CodeMirror 依据 dark 标记选择基座主题——不设 dark 时按 light 基座给选区用亮色
+// （#d7d4f0/#d9d9d9），在暗色应用下即便自定义了选区背景也会让原生亮色透出，造成“过亮 / 两种颜色叠加”。
+const themeComp = new Compartment()
+const buildEditorTheme = () => EditorView.theme(editorThemeSpec, { dark: colorMode.value === 'dark' })
+
+// 切换明暗主题时重配置 CodeMirror 主题（保留文档与撤销历史）
+watch(
+  () => colorMode.value,
+  () => {
+    if (mode.value === 'style' && cmView) {
+      cmView.dispatch({ effects: themeComp.reconfigure(buildEditorTheme()) })
+    }
+  }
+)
 const props = defineProps<{
   modelValue: string
   styleValue?: string
@@ -180,11 +201,11 @@ const mountCM = () => {
       keymap.of([...closeBracketsKeymap, ...completionKeymap, indentWithTab, ...defaultKeymap, ...historyKeymap]),
       closeBrackets(),
       autocompletion({ override: [scssCompletions] }),
-      editorTheme,
+      themeComp.of(buildEditorTheme()),
       syntaxHighlighting(editorHighlight),
       sass(),
       lineWrapComp.of(wrap.value ? EditorView.lineWrapping : []),
-      placeholder(props.stylePlaceholder ?? ''),
+      placeholderExt(props.stylePlaceholder ?? ''),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) emit('update:styleValue', u.state.doc.toString())
       }),

@@ -58,6 +58,15 @@
     "appearance": "Appearance",
     "darkMode": "Dark Mode",
     "darkModeHint": "Switch between light and dark display",
+    "autosave": {
+      "title": "Auto-save Workspace",
+      "label": "Enable auto-save",
+      "hint": "When enabled, your edits in the page editor are saved automatically and restored next time (off by default)."
+    },
+    "groups": {
+      "preferences": "Preferences",
+      "theme": "Theme"
+    },
     "colors": {
       "sakura": "Sakura Pink",
       "coral": "Coral Pink",
@@ -189,7 +198,7 @@
     "socialExternal": "External social links",
     "cropAvatar": "Crop avatar (1:1)",
     "social": {
-      "qq": "QQ number",
+      "qq": "QQ",
       "wechat": "WeChat ID",
       "bilibili": "Bilibili profile link",
       "youtube": "YouTube channel link",
@@ -218,7 +227,8 @@
     "acl": "Permissions",
     "toc": "Table of Contents",
     "backToTop": "Back to top",
-    "noToc": "No table of contents on this page"
+    "noToc": "No table of contents on this page",
+    "editingBanner": "{nickname} is editing this page"
   },
   "editor": {
     "wrap": "Wrap",
@@ -233,6 +243,7 @@
     },
     "titleRequired": "Please provide a title",
     "saveFailed": "Save failed",
+    "lockedTitle": "Cannot Edit",
     "noPermission": "This feature is available to regular users and above. Please log in first.",
     "backToHome": "Back to home",
     "openPage": "Open page",
@@ -245,6 +256,10 @@
     "saved": "Saved successfully. Return to the page to view?",
     "savedNo": "No",
     "savedYes": "Yes",
+    "stay": "Back to editor",
+    "newCommitTitle": "New Changes on Page",
+    "reloadMessage": "This page has new commits from others. Reload the page?\nMake sure you have no important unsaved edits before reloading.",
+    "reload": "Reload",
     "selectPage": "Select the page to edit",
     "noPages": "No pages yet",
     "openSelected": "Open selected page",

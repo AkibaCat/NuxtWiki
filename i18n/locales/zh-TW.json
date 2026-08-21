@@ -58,6 +58,15 @@
     "appearance": "外觀",
     "darkMode": "深色模式",
     "darkModeHint": "在淺色與深色顯示之間切換",
+    "autosave": {
+      "title": "自動儲存工作區",
+      "label": "開啟自動儲存",
+      "hint": "開啟後，頁面編輯器中的編輯內容會自動儲存並在下次開啟時復原（預設關閉）。"
+    },
+    "groups": {
+      "preferences": "偏好設定",
+      "theme": "主題"
+    },
     "colors": {
       "sakura": "櫻花粉",
       "coral": "珊瑚粉",
@@ -189,7 +198,7 @@
     "socialExternal": "外部社交連線",
     "cropAvatar": "裁剪頭像（1:1）",
     "social": {
-      "qq": "QQ 號碼",
+      "qq": "QQ號",
       "wechat": "微信號",
       "bilibili": "嗶哩嗶哩主頁連結",
       "youtube": "YouTube 頻道連結",
@@ -218,7 +227,8 @@
     "acl": "權限",
     "toc": "本頁目錄",
     "backToTop": "返回頂部",
-    "noToc": "本頁暫無目錄"
+    "noToc": "本頁暫無目錄",
+    "editingBanner": "{nickname}正在編輯該頁面"
   },
   "editor": {
     "wrap": "自動換行",
@@ -233,6 +243,7 @@
     },
     "titleRequired": "請填寫標題",
     "saveFailed": "儲存失敗",
+    "lockedTitle": "無法編輯",
     "noPermission": "此功能僅普通使用者及以上可用，請先登入。",
     "backToHome": "返回首頁",
     "openPage": "開啟頁面",
@@ -245,6 +256,10 @@
     "saved": "儲存成功，是否返回頁面查看",
     "savedNo": "否",
     "savedYes": "是",
+    "stay": "返回編輯器",
+    "newCommitTitle": "頁面已有新提交",
+    "reloadMessage": "目前頁面有其他新的提交，是否重新載入頁面？\n重新載入前請確保目前編輯無重要編輯內容",
+    "reload": "重新載入",
     "selectPage": "選擇要編輯的頁面",
     "noPages": "暫無頁面",
     "openSelected": "開啟所選頁面",

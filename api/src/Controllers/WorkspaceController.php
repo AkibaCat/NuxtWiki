@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * 工作区持久化（沉浸式页面编辑器专用，普通用户及以上可用）。
  * 工作区内容（打开的页面标签 + 各自的草稿）以 JSON 文件形式存于 data 目录，
- * 按用户隔离，用于「离开自动保存、再次打开自动恢复」。
+ * 按用户隔离，用于「开启自动保存后离开自动保存、再次打开自动恢复」。
  */
 final class WorkspaceController
 {
@@ -80,11 +80,13 @@ final class WorkspaceController
     private static function sanitizeTab(mixed $t): array
     {
         return [
-            'tag'     => (string)($t['tag'] ?? ''),
-            'title'   => (string)($t['title'] ?? ''),
-            'body'    => mb_substr((string)($t['body'] ?? ''), 0, 200000),
-            'style'   => mb_substr((string)($t['style'] ?? ''), 0, 200000),
-            'comment' => (string)($t['comment'] ?? ''),
+            'tag'           => (string)($t['tag'] ?? ''),
+            'title'         => (string)($t['title'] ?? ''),
+            'body'          => mb_substr((string)($t['body'] ?? ''), 0, 200000),
+            'style'         => mb_substr((string)($t['style'] ?? ''), 0, 200000),
+            'comment'       => (string)($t['comment'] ?? ''),
+            // 页面内容加载进编辑器时的服务器时间（用于下次打开时检测他人新提交）
+            'baseUpdatedAt' => (string)($t['baseUpdatedAt'] ?? ''),
         ];
     }
 }

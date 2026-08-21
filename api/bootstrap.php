@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 // ---------- 版本 ----------
 /** NuxtWiki 当前版本号（发布时更新，与 Release Notes 文件夹保持一致） */
-const NUVTWIKI_VERSION = '1.3.1';
+const NUVTWIKI_VERSION = '1.3.2';
 
 // ---------- 基础环境 ----------
 error_reporting(E_ALL);
@@ -56,6 +56,6 @@ require __DIR__ . '/src/Controllers/UserController.php';
 require __DIR__ . '/src/Controllers/PageController.php';
 require __DIR__ . '/src/Controllers/RegCodeController.php';
 require __DIR__ . '/src/Controllers/WatchController.php';
+require __DIR__ . '/src/Controllers/WorkspaceController.php';
 require __DIR__ . '/src/Controllers/FeedController.php';
 require __DIR__ . '/src/Controllers/AdminController.php';
-require __DIR__ . '/src/Controllers/WorkspaceController.php';

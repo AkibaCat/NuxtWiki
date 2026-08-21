@@ -84,6 +84,15 @@ CREATE TABLE IF NOT EXISTS regcodes (
   KEY idx_regcodes_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS page_edits (
+  tag        VARCHAR(191) NOT NULL,
+  user_id    INT UNSIGNED NOT NULL,
+  nickname   VARCHAR(64)  NOT NULL DEFAULT '',
+  started_at DATETIME     NOT NULL,
+  updated_at DATETIME     NOT NULL,
+  PRIMARY KEY (tag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS settings (
   skey   VARCHAR(64) NOT NULL,
   svalue TEXT        NULL,
