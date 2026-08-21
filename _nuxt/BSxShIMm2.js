@@ -1,0 +1,1 @@
+import{At as e,G as t,M as n,P as r,Wn as i}from"./0Lt0He3v.js";import{it as a}from"./BHX1crfo.js";import{t as o}from"./9VqaKVNE2.js";var s=t({__name:`index`,setup(t){let s=a(),c=n(()=>String(s.params.tag||``));return(t,n)=>{let a=o;return e(),r(a,{tag:i(c),key:i(c)},null,8,[`tag`])}}});export{s as default};

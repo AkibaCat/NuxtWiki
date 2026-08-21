@@ -1,0 +1,1 @@
+import{N as e}from"./Cog3CEOS.js";var t=()=>({user:e(`auth.user`,()=>null),ready:e(`auth.ready`,()=>!1),site:e(`auth.site`,()=>null),csrf:e(`auth.csrf`,()=>``),registrationOpen:e(`auth.registrationOpen`,()=>!0)});export{t};

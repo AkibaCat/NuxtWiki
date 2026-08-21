@@ -1,0 +1,1 @@
+import{P as e}from"./Cog3CEOS.js";import{Xt as t}from"./0Lt0He3v.js";import{i as n}from"./BVavn8WE.js";var r=0;function i(i,a=`reka`){if(i)return i;let o,s=n({useId:void 0});return o=s.useId?s.useId():`useId`in e?t?.():`${++r}`,a?`${a}-${o}`:o}export{i as t};

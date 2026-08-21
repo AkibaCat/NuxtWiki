@@ -1,0 +1,1 @@
+import{N as e}from"./Cog3CEOS.js";var t=()=>e(`color-mode`).value;export{t};

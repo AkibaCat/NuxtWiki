@@ -1,0 +1,1 @@
+import{N as e}from"./Cog3CEOS.js";var t=`wiki.editor.autosave`,n=()=>{let n=e(`wiki.editor.autosave`,()=>!1);return(()=>{try{n.value=localStorage.getItem(t)===`1`}catch{n.value=!1}})(),{enabled:n,setEnabled:e=>{n.value=e;try{localStorage.setItem(t,e?`1`:`0`)}catch{}}}};export{n as t};

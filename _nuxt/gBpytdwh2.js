@@ -1,0 +1,1 @@
+import{N as e}from"./Cog3CEOS.js";var t=()=>{let t=e(`wiki.title.override`,()=>null);return{override:t,setTitle:e=>{t.value=e}}};export{t};

@@ -1,0 +1,40 @@
+// ============================================================
+//  Grammar Help — Page Style Sheet (SCSS)
+// ============================================================
+// This stylesheet applies ONLY to this page. It supports the full
+// SCSS syntax: variables, nesting, mixins, functions, etc.
+//
+// In the page body you can apply styles with the custom syntax:
+//   [text]{%class}   -> wrap in <span class="class"> (defined below)
+//   [text]{$name}    -> use SCSS variable $name as the text color
+//   [text]{$TC}      -> built-in site theme color (NOT definable here)
+//
+// Any top-level variable ($name: value;) is exposed as a CSS custom
+// property (--name) and can be referenced from the body via [$name].
+
+// Brand color used throughout this stylesheet.
+$brand: #d10029;
+
+// Example variable, usable in the body as [ ... ]{$accent}.
+$accent: #7c3aed;
+
+// Example variable, usable in the body as [ ... ]{$color}.
+$color: #7ccc3c;
+
+// Example class, usable in the body as [ ... ]{%text}.
+.text {
+  display: inline;
+  padding: 0 0.35em;
+  border-radius: 0.3em;
+  background: rgba($brand, 0.5);
+  color: #f4ac30;
+  font-weight: 600;
+}
+
+// Gradient text effect.
+.section {
+  background: linear-gradient(to right, rgb(18, 194, 233), rgb(196, 113, 237), rgb(246, 79, 89));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
