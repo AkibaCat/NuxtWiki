@@ -1,6 +1,8 @@
 <h1 align="center">NuxtWiki</h1>
 
-<img src="../../public/nuxtwiki.svg" alt="NuxtWiki Logo" width="200" height="200" style="display: block; margin: 0 auto;" />
+<p align="center">
+  <img src="../../public/nuxtwiki.svg" alt="NuxtWiki Logo" width="200" height="200" style="display: block;" />
+</p>
 
 <p align="center">
   <a href="README.md">English</a> | <a href="../../README.md">简体中文</a> | <a href="../zh-TW/README.md" style="color: #007bff;">繁体中文</a>
