@@ -1,0 +1,1 @@
+import{L as e}from"./BnEtCG1_.js";var t=()=>e(`color-mode`).value;export{t};

@@ -1,0 +1,1 @@
+import{$ as e}from"./0Lt0He3v.js";function t(){let t=e()?.vnode?.scopeId;return t?{[t]:``}:{}}export{t};

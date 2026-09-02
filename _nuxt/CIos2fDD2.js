@@ -1,0 +1,1 @@
+import{L as e}from"./BnEtCG1_.js";var t=()=>{let t=e(`wiki.title.override`,()=>null);return{override:t,setTitle:e=>{t.value=e}}};export{t};

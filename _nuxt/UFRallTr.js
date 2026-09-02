@@ -1,0 +1,1 @@
+import{At as e,G as t,M as n,P as r,Wn as i}from"./0Lt0He3v.js";import{it as a}from"./BHX1crfo.js";import{t as o}from"./2nhA9X222.js";import{t as s}from"./CFhAlkX-2.js";var c=t({__name:`index`,setup(t){a();let{site:c}=o(),l=n(()=>c.value?.home_tag||`Home`);return(t,n)=>{let a=s;return e(),r(a,{tag:i(l),key:i(l)},null,8,[`tag`])}}});export{c as default};
