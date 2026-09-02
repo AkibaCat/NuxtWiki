@@ -42,6 +42,14 @@
     "title": "Table of Contents",
     "backToTop": "Back to top"
   },
+  "groups": {
+    "browse": "Browse Pages",
+    "byPage": "Pages",
+    "byGroup": "Groups",
+    "pageFilter": "Filter pages…",
+    "groupFilter": "Filter groups…",
+    "empty": "No matching groups"
+  },
   "footer": {
     "builtWith": "Built with Nuxt UI & PHP/MySQL",
     "rss": "RSS Feed"
@@ -250,6 +258,11 @@
     "createPage": "Create page",
     "emptyWorkspace": "No page is open for editing. Select the page you want to edit.",
     "pageTitle": "Page title",
+    "groupPlaceholder": "Select or enter a group",
+    "groupCreateLabel": "Create group \"{group}\"",
+    "groupSaved": "Group updated",
+    "groupSaveFailed": "Failed to update group",
+    "commentPlaceholder": "Edit description…",
     "closePreview": "Close preview",
     "preview": "Preview",
     "bodyPlaceholder": "Write content using Markdown syntax…",

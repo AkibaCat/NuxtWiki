@@ -42,6 +42,14 @@
     "title": "此页目录",
     "backToTop": "返回顶部"
   },
+  "groups": {
+    "browse": "页面浏览",
+    "byPage": "页面",
+    "byGroup": "分组",
+    "pageFilter": "筛选页面…",
+    "groupFilter": "筛选分组…",
+    "empty": "没有匹配的分组"
+  },
   "footer": {
     "builtWith": "基于 Nuxt UI 与 PHP/MySQL",
     "rss": "RSS 订阅"
@@ -250,6 +258,11 @@
     "createPage": "创建页面",
     "emptyWorkspace": "未打开任何页面编辑，请选择需要编辑的页面",
     "pageTitle": "页面标题",
+    "groupPlaceholder": "选择或输入分组",
+    "groupCreateLabel": "创建分组“{group}”",
+    "groupSaved": "分组修改成功",
+    "groupSaveFailed": "分组修改失败",
+    "commentPlaceholder": "本次编辑说明…",
     "closePreview": "关闭预览",
     "preview": "预览",
     "bodyPlaceholder": "使用 Markdown 语法编写内容…",

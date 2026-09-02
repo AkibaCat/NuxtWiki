@@ -31,7 +31,10 @@ final class Database
                     $cfg['name'] ?? 'nuxtwiki',
                     $cfg['charset'] ?? 'utf8mb4'
                 );
-                self::$pdo = new PDO($dsn, $cfg['user'] ?? 'root', $cfg['password'] ?? '', $options);
+                // 持久连接：复用进程内存活的 MySQL 连接，避免每个请求对（外部）数据库冷建连接，
+                // 可显著降低外部数据库场景下的页面延迟。见 connectPersistent()。
+                $options[PDO::ATTR_PERSISTENT] = true;
+                self::$pdo = self::connectPersistent($dsn, $cfg['user'] ?? 'root', $cfg['password'] ?? '', $options);
             } else {
                 $path = $cfg['sqlite_path'] ?? (__DIR__ . '/../data/nuxtwiki.sqlite');
                 $dir  = dirname($path);
@@ -63,6 +66,23 @@ final class Database
     public static function lastInsertId(): int
     {
         return (int)self::pdo()->lastInsertId();
+    }
+
+    /**
+     * 建立 MySQL 连接（优先常驻复用）。进程内复用的持久连接可能因长时空闲被服务端关闭
+     * （MySQL server has gone away），因此建连后做一次轻量探活；失效则回退为一次性连接重试，
+     * 保证接口不因连接过期而报 500。
+     */
+    private static function connectPersistent(string $dsn, string $user, string $pass, array $options): PDO
+    {
+        for ($try = 0; $try < 2; $try++) {
+            // 第一次用常驻连接；若池内连接已失效，第二次改为一次性连接规避坏句柄
+            $options[PDO::ATTR_PERSISTENT] = $try === 0;
+            $pdo = new PDO($dsn, $user, $pass, $options);
+            $pdo->query('SELECT 1');
+            return $pdo;
+        }
+        throw new RuntimeException('无法连接数据库');
     }
 
     public static function now(): string

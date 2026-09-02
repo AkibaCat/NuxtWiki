@@ -4,6 +4,10 @@ declare(strict_types=1);
 /** 认证与会话（PHP Session + Cookie），同源部署 */
 final class Auth
 {
+    /** 请求级用户缓存，避免同一请求内多次查库 */
+    private static ?array $userCache = null;
+    private static bool $userCacheLoaded = false;
+
     public static function startSession(): void
     {
         if (session_status() === PHP_SESSION_ACTIVE) {
@@ -21,22 +25,35 @@ final class Auth
         session_start();
     }
 
-    /** 当前登录用户（未登录返回 null） */
+    /** 当前登录用户（未登录返回 null）。结果按请求缓存，避免重复查库。 */
     public static function user(): ?array
     {
         self::startSession();
         $id = $_SESSION['user_id'] ?? null;
         if (!$id) {
+            self::$userCache = null;
+            self::$userCacheLoaded = false;
             return null;
+        }
+        if (self::$userCacheLoaded) {
+            return self::$userCache;
         }
         $st = Database::pdo()->prepare('SELECT * FROM ' . Database::qi('users') . ' WHERE id = ?');
         $st->execute([(int)$id]);
         $u = $st->fetch();
         if (!$u) {
             unset($_SESSION['user_id']);
-            return null;
         }
-        return $u;
+        self::$userCache = $u === false ? null : $u;
+        self::$userCacheLoaded = true;
+        return self::$userCache;
+    }
+
+    /** 用户记录被当前请求修改后调用，丢弃请求级缓存以获得最新数据 */
+    public static function forgetUser(): void
+    {
+        self::$userCache = null;
+        self::$userCacheLoaded = false;
     }
 
     public static function isAdmin(): bool
@@ -135,12 +152,14 @@ final class Auth
         // 重新生成会话 ID，防止会话固定（session fixation）攻击
         session_regenerate_id(true);
         $_SESSION['user_id'] = $userId;
+        self::forgetUser();
     }
 
     public static function logout(): void
     {
         self::startSession();
         $_SESSION = [];
+        self::forgetUser();
         if (ini_get('session.use_cookies')) {
             $p = session_get_cookie_params();
             setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);

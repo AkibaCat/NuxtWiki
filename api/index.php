@@ -51,6 +51,7 @@ Router::add('GET',  'page.contributors', PageController::class, 'contributorsEnd
 Router::add('GET',  'page.similar',    PageController::class, 'similar');
 Router::add('GET',  'page.perms',      PageController::class, 'perms');
 Router::add('POST', 'page.save',       PageController::class, 'save');
+Router::add('POST', 'page.set-group', PageController::class, 'setGroup');
 Router::add('POST', 'page.update-acl', PageController::class, 'updateAcl');
 Router::add('POST', 'page.delete',     PageController::class, 'delete');
 Router::add('POST', 'page.revert',     PageController::class, 'revert');

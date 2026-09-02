@@ -4,6 +4,8 @@ declare(strict_types=1);
 /** 认证：登录 / 注册 / 登出 / 当前用户 / CSRF */
 final class AuthController
 {
+    /** 用户不存在时也执行一次 password_verify 的固件哈希，以抹平时序差异（防用户名枚举） */
+    private const DUMMY_HASH = '$2y$12$64Ar1UJcAt2vX9QdsNsHnehAPyI3AVsO.zmcC56qGkgK5skH6daW2';
     /** GET auth.me —— 当前用户 + CSRF（前端初始化用） */
     public static function me(): never
     {
@@ -40,7 +42,12 @@ final class AuthController
         $st = Database::pdo()->prepare('SELECT * FROM ' . Database::qi('users') . ' WHERE username = ?');
         $st->execute([$username]);
         $u = $st->fetch();
-        if (!$u || !password_verify($password, $u['password'])) {
+        if (!$u) {
+            // 用户不存在也执行一次校验，避免通过响应时间判断用户名是否存在
+            password_verify($password, self::DUMMY_HASH);
+            Response::error('用户名或密码错误。', 401, 'LOGIN_FAILED');
+        }
+        if (!password_verify($password, $u['password'])) {
             Response::error('用户名或密码错误。', 401, 'LOGIN_FAILED');
         }
 

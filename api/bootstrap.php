@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 // ---------- 版本 ----------
 /** NuxtWiki 当前版本号（发布时更新，与 Release Notes 文件夹保持一致） */
-const NUVTWIKI_VERSION = '1.3.2';
+const NUVTWIKI_VERSION = '1.3.3';
 
 // ---------- 基础环境 ----------
 error_reporting(E_ALL);

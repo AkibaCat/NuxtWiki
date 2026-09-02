@@ -23,18 +23,15 @@ final class PageController
 
         // 未创建页面：始终允许读取元信息，交由前端决定是否提示创建
         if ($page === null) {
-            Response::data([
+            $can = [];
+            foreach (self::ACL_MAP as $col => $kind) {
+                $can['can_' . substr($col, 4)] = Auth::canLevel((int)Settings::defaultLevel($kind), $user);
+            }
+            Response::data(array_merge($can, [
                 'exists'          => false,
                 'tag'             => $tag,
-                'can_read'        => true,
-                'can_edit'        => Auth::canLevel((int)Settings::defaultLevel('edit'), $user),
-                'can_history'     => Auth::canLevel((int)Settings::defaultLevel('history'), $user),
-                'can_diff'        => Auth::canLevel((int)Settings::defaultLevel('diff'), $user),
-                'can_backlinks'   => Auth::canLevel((int)Settings::defaultLevel('backlinks'), $user),
-                'can_acl'         => Auth::canLevel((int)Settings::defaultLevel('perms'), $user),
-                'can_contributors'=> Auth::canLevel((int)Settings::defaultLevel('contributors'), $user),
                 'watching'        => false,
-            ]);
+            ]));
         }
 
         if (!Auth::canLevel((int)($page['acl_read'] ?? 0), $user)) {
@@ -46,22 +43,19 @@ final class PageController
         $st->execute([(int)$page['id']]);
         $page['hits'] = (int)$page['hits'] + 1;
 
-        Response::data([
+        $can = [];
+        foreach (self::ACL_MAP as $col => $kind) {
+            $can['can_' . substr($col, 4)] = Auth::canLevel((int)($page[$col] ?? (int)Settings::defaultLevel($kind)), $user);
+        }
+        Response::data(array_merge($can, [
             'exists'          => true,
             'page'            => self::payload($page),
-            'can_read'        => Auth::canLevel((int)($page['acl_read'] ?? 0), $user),
-            'can_edit'        => Auth::canLevel((int)($page['acl_edit'] ?? 3), $user),
-            'can_history'     => Auth::canLevel((int)($page['acl_history'] ?? 3), $user),
-            'can_diff'        => Auth::canLevel((int)($page['acl_diff'] ?? 2), $user),
-            'can_backlinks'   => Auth::canLevel((int)($page['acl_backlinks'] ?? 3), $user),
-            'can_acl'         => Auth::canLevel((int)($page['acl_acl'] ?? 1), $user),
-            'can_contributors'=> Auth::canLevel((int)($page['acl_contributors'] ?? 0), $user),
             'watching'        => $user !== null && self::isWatching((int)$page['id'], (int)$user['id']),
             'is_admin'        => Auth::isAdmin(),
-            'contributors'    => self::contributors((int)$page['id']),
+            'contributor_count' => self::contributorCount((int)$page['id']),
             'subscriber_count'=> self::subscriberCount((int)$page['id']),
             'edit_lock'       => self::editLock($tag),
-        ]);
+        ]));
     }
 
     /** POST page.lock —— 获取 / 续期页面编辑锁（他人持锁时返回 423） */
@@ -80,36 +74,72 @@ final class PageController
             $nickname = (string)($user['username'] ?? '');
         }
         $db = Database::pdo();
-        $existing = self::findEditLock($tag);
-        if ($existing !== null) {
-            if ((int)$existing['user_id'] === (int)$user['id']) {
+
+        // 事务内读取 + 写入，避免两请求同时读到「无锁」导致并发抢锁
+        $db->beginTransaction();
+        try {
+            // MySQL 用 FOR UPDATE 锁定行；SQLite 依靠写锁 + 下方唯一键冲突兜底
+            $sql = 'SELECT * FROM ' . Database::qi('page_edits') . ' WHERE ' . Database::qi('tag') . ' = ?'
+                 . (Database::driver() === 'mysql' ? ' FOR UPDATE' : '');
+            $st = $db->prepare($sql);
+            $st->execute([$tag]);
+            $existing = $st->fetch();
+            if ($existing === false) {
+                $existing = null;
+            }
+
+            if ($existing !== null && (int)$existing['user_id'] === (int)$user['id']) {
                 // 自己持有：刷新心跳
                 $st = $db->prepare(
                     'UPDATE ' . Database::qi('page_edits') . ' SET ' . Database::qi('updated_at') . ' = ? WHERE ' . Database::qi('tag') . ' = ?'
                 );
                 $st->execute([$now, $tag]);
+                $db->commit();
                 Response::data(['locked' => true, 'editor' => $nickname]);
             }
-            if (self::isLockActive($existing)) {
+
+            if ($existing !== null && self::isLockActive($existing)) {
                 // 他人持锁且未过期：拒绝
-                Response::error('此页面正在由' . (string)$existing['nickname'] . '编辑，请等待其他用户编辑完成。', 423, 'PAGE_LOCKED');
+                $holder = (string)$existing['nickname'];
+                $db->rollBack();
+                Response::error('此页面正在由' . $holder . '编辑，请等待其他用户编辑完成。', 423, 'PAGE_LOCKED');
             }
-            // 锁已过期：接管
-            $st = $db->prepare(
-                'UPDATE ' . Database::qi('page_edits') . ' SET ' . Database::qi('user_id') . ' = ?, '
-                . Database::qi('nickname') . ' = ?, ' . Database::qi('updated_at') . ' = ? WHERE ' . Database::qi('tag') . ' = ?'
-            );
-            $st->execute([(int)$user['id'], $nickname, $now, $tag]);
+
+            if ($existing !== null) {
+                // 锁已过期：接管（把 tag 上残留的锁归属到当前用户）
+                $st = $db->prepare(
+                    'UPDATE ' . Database::qi('page_edits') . ' SET ' . Database::qi('user_id') . ' = ?, '
+                    . Database::qi('nickname') . ' = ?, ' . Database::qi('updated_at') . ' = ? WHERE ' . Database::qi('tag') . ' = ?'
+                );
+                $st->execute([(int)$user['id'], $nickname, $now, $tag]);
+            } else {
+                // 无锁：新建
+                $st = $db->prepare(
+                    'INSERT INTO ' . Database::qi('page_edits')
+                    . ' (' . Database::qi('tag') . ', ' . Database::qi('user_id') . ', ' . Database::qi('nickname') . ', '
+                    . Database::qi('started_at') . ', ' . Database::qi('updated_at') . ') VALUES (?, ?, ?, ?, ?)'
+                );
+                $st->execute([$tag, (int)$user['id'], $nickname, $now, $now]);
+            }
+            $db->commit();
             Response::data(['locked' => true, 'editor' => $nickname]);
+        } catch (Throwable) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            // 唯一键冲突等并发情形：重新读取锁状态，据此给出准确结果
+            $again = self::findEditLock($tag);
+            if ($again !== null) {
+                if ((int)$again['user_id'] === (int)$user['id'] && self::isLockActive($again)) {
+                    Response::data(['locked' => true, 'editor' => $nickname]);
+                }
+                if (self::isLockActive($again)) {
+                    Response::error('此页面正在由' . (string)$again['nickname'] . '编辑，请等待其他用户编辑完成。', 423, 'PAGE_LOCKED');
+                }
+            }
+            // 兜底：让客户端稍后重试
+            Response::error('获取编辑锁失败，请重试。', 409, 'PAGE_LOCK_CONFLICT');
         }
-        // 无锁：新建
-        $st = $db->prepare(
-            'INSERT INTO ' . Database::qi('page_edits')
-            . ' (' . Database::qi('tag') . ', ' . Database::qi('user_id') . ', ' . Database::qi('nickname') . ', '
-            . Database::qi('started_at') . ', ' . Database::qi('updated_at') . ') VALUES (?, ?, ?, ?, ?)'
-        );
-        $st->execute([$tag, (int)$user['id'], $nickname, $now, $now]);
-        Response::data(['locked' => true, 'editor' => $nickname]);
     }
 
     /** POST page.unlock —— 释放本人持有的页面编辑锁 */
@@ -133,11 +163,12 @@ final class PageController
     public static function list(): never
     {
         $rows = Database::pdo()->query(
-            'SELECT tag, title, ' . Database::qi('hits') . ', ' . Database::qi('updated_at') . ' FROM ' . Database::qi('pages') . ' ORDER BY tag'
+            'SELECT tag, title, ' . Database::qi('group') . ', ' . Database::qi('hits') . ', ' . Database::qi('updated_at') . ' FROM ' . Database::qi('pages') . ' ORDER BY tag'
         )->fetchAll();
         Response::data(array_map(fn($r) => [
             'tag'        => (string)$r['tag'],
             'title'      => (string)$r['title'],
+            'group'      => (string)($r['group'] ?? self::DEFAULT_GROUP),
             'hits'       => (int)$r['hits'],
             'updated_at' => (string)$r['updated_at'],
         ], $rows));
@@ -277,6 +308,39 @@ final class PageController
         ]);
     }
 
+    /** POST page.set-group —— 立即设置页面分组（不整体保存正文/标题） */
+    public static function setGroup(): never
+    {
+        Auth::verifyCsrf();
+        $b = Response::body();
+        $tag = Text::normalizeTag((string)($b['tag'] ?? ''));
+        $group = trim((string)($b['group'] ?? ''));
+        if ($group === '') {
+            $group = self::DEFAULT_GROUP;
+        }
+        if ($tag === '') {
+            Response::error('缺少页面名。', 422, 'INVALID_INPUT');
+        }
+        $user = Auth::user();
+        if (Auth::isDisabled($user)) {
+            Response::error('该账号已被冻结/封禁，无法编辑页面。', 403, 'ACCOUNT_DISABLED');
+        }
+        $page = self::find($tag);
+        if ($page === null) {
+            // 页面尚未创建：分组将随 page.save 一并写入，此处仅返回前端即时反馈
+            Response::data(['group' => $group, 'applied' => false]);
+        }
+        $aclEdit = (int)($page['acl_edit'] ?? 3);
+        if (!Auth::canLevel($aclEdit, $user)) {
+            Response::error('你没有编辑该页面的权限。', 403, 'FORBIDDEN');
+        }
+        $db = Database::pdo();
+        // 仅更新分组列：不动 updated_at/revision，避免触发并发冲突检测与最近更新排序
+        $st = $db->prepare('UPDATE ' . Database::qi('pages') . ' SET ' . Database::qi('group') . ' = ? WHERE id = ?');
+        $st->execute([$group, (int)$page['id']]);
+        Response::data(['group' => $group, 'applied' => true]);
+    }
+
     /** POST page.save —— 新建 / 更新 */
     public static function save(): never
     {
@@ -284,6 +348,10 @@ final class PageController
         $b = Response::body();
         $tag = Text::normalizeTag((string)($b['tag'] ?? ''));
         $title = trim((string)($b['title'] ?? ''));
+        $group = trim((string)($b['group'] ?? ''));
+        if ($group === '') {
+            $group = self::DEFAULT_GROUP;
+        }
         $body = (string)($b['body'] ?? '');
         $style = (string)($b['style'] ?? '');
         $comment = trim((string)($b['comment'] ?? ''));
@@ -320,23 +388,21 @@ final class PageController
 
         // 新建页面：插入页面记录并写入首个修订（revision=1）
         if ($page === null) {
+            $aclCols = [];
+            $aclVals = [];
+            foreach (self::ACL_MAP as $col => $kind) {
+                $aclCols[] = Database::qi($col);
+                $aclVals[] = Settings::defaultLevel($kind);
+            }
             $st = $db->prepare(
                 'INSERT INTO ' . Database::qi('pages')
-                . ' (' . Database::qi('tag') . ', ' . Database::qi('title') . ', ' . Database::qi('body') . ', '
+                . ' (' . Database::qi('tag') . ', ' . Database::qi('group') . ', ' . Database::qi('title') . ', ' . Database::qi('body') . ', '
                 . Database::qi('style') . ', ' . Database::qi('comment') . ', ' . Database::qi('user_id') . ', '
                 . Database::qi('created_by') . ', ' . Database::qi('created_at') . ', ' . Database::qi('updated_at') . ', '
-                . Database::qi('revision') . ', ' . Database::qi('acl_read') . ', ' . Database::qi('acl_edit') . ', '
-                . Database::qi('acl_history') . ', ' . Database::qi('acl_diff') . ', ' . Database::qi('acl_backlinks') . ', '
-                . Database::qi('acl_acl') . ', ' . Database::qi('acl_contributors') . ') '
-                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)'
+                . Database::qi('revision') . ', ' . implode(', ', $aclCols) . ') '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ' . implode(', ', array_fill(0, count($aclVals), '?')) . ')'
             );
-            $st->execute([
-                $tag, $title, $body, $style, $comment, $userId, $userId,
-                $now, $now,
-                Settings::defaultLevel('read'), Settings::defaultLevel('edit'), Settings::defaultLevel('history'),
-                Settings::defaultLevel('diff'), Settings::defaultLevel('backlinks'), Settings::defaultLevel('perms'),
-                Settings::defaultLevel('contributors'),
-            ]);
+            $st->execute(array_merge([$tag, $group, $title, $body, $style, $comment, $userId, $userId, $now, $now], $aclVals));
             $pageId = Database::lastInsertId();
             self::insertRevision($pageId, $tag, $title, $body, $style, $comment, $userId, 1, $now);
             Response::data(['created' => true, 'tag' => $tag, 'revision' => 1, 'updated_at' => $now], 201);
@@ -345,11 +411,11 @@ final class PageController
         // 更新现有页面：递增修订号并写入新修订
         $newRevision = (int)$page['revision'] + 1;
         $st = $db->prepare(
-            'UPDATE ' . Database::qi('pages') . ' SET ' . Database::qi('title') . ' = ?, ' . Database::qi('body') . ' = ?, '
+            'UPDATE ' . Database::qi('pages') . ' SET ' . Database::qi('group') . ' = ?, ' . Database::qi('title') . ' = ?, ' . Database::qi('body') . ' = ?, '
             . Database::qi('style') . ' = ?, ' . Database::qi('comment') . ' = ?, ' . Database::qi('user_id') . ' = ?, '
             . Database::qi('updated_at') . ' = ?, ' . Database::qi('revision') . ' = ? WHERE id = ?'
         );
-        $st->execute([$title, $body, $style, $comment, $userId, $now, $newRevision, (int)$page['id']]);
+        $st->execute([$group, $title, $body, $style, $comment, $userId, $now, $newRevision, (int)$page['id']]);
         self::insertRevision((int)$page['id'], $tag, $title, $body, $style, $comment, $userId, $newRevision, $now);
 
         Response::data(['created' => false, 'tag' => $tag, 'revision' => $newRevision, 'updated_at' => $now]);
@@ -370,18 +436,9 @@ final class PageController
         if (!Auth::canLevel((int)($page['acl_acl'] ?? 1), $user)) {
             Response::error('没有权限修改该页面的访问控制。', 403, 'FORBIDDEN');
         }
-        $fields = [
-            'acl_read'         => 'read',
-            'acl_edit'         => 'edit',
-            'acl_history'      => 'history',
-            'acl_diff'         => 'diff',
-            'acl_backlinks'    => 'backlinks',
-            'acl_acl'          => 'perms',
-            'acl_contributors' => 'contributors',
-        ];
         $values = [];
         $set = [];
-        foreach ($fields as $col => $kind) {
+        foreach (self::ACL_MAP as $col => $kind) {
             $v = trim((string)($b[$col] ?? $page[$col] ?? Settings::defaultLevel($kind)));
             if (!in_array($v, ['0', '1', '2', '3'], true)) {
                 Response::error('权限等级只能为 0~3。', 422, 'INVALID_INPUT');
@@ -562,25 +619,17 @@ final class PageController
         $tag = Text::normalizeTag((string)($_GET['tag'] ?? ''));
         $page = self::find($tag);
         if ($page === null) {
-            Response::data([
-                'acl_read'         => Settings::defaultLevel('read'),
-                'acl_edit'         => Settings::defaultLevel('edit'),
-                'acl_history'      => Settings::defaultLevel('history'),
-                'acl_diff'         => Settings::defaultLevel('diff'),
-                'acl_backlinks'    => Settings::defaultLevel('backlinks'),
-                'acl_acl'          => Settings::defaultLevel('perms'),
-                'acl_contributors' => Settings::defaultLevel('contributors'),
-            ]);
+            $out = [];
+            foreach (self::ACL_MAP as $col => $kind) {
+                $out[$col] = Settings::defaultLevel($kind);
+            }
+            Response::data($out);
         }
-        Response::data([
-            'acl_read'         => (string)$page['acl_read'],
-            'acl_edit'         => (string)$page['acl_edit'],
-            'acl_history'      => (string)$page['acl_history'],
-            'acl_diff'         => (string)$page['acl_diff'],
-            'acl_backlinks'    => (string)$page['acl_backlinks'],
-            'acl_acl'          => (string)$page['acl_acl'],
-            'acl_contributors' => (string)$page['acl_contributors'],
-        ]);
+        $out = [];
+        foreach (self::ACL_MAP as $col => $kind) {
+            $out[$col] = (string)$page[$col];
+        }
+        Response::data($out);
     }
 
     // ==================== 内部工具 ====================
@@ -596,6 +645,20 @@ final class PageController
 
     /** 编辑锁有效期（秒）：前端每 30s 心跳一次，超时视为放弃 */
     private const LOCK_TTL = 90;
+
+    /** 页面默认分组 */
+    private const DEFAULT_GROUP = '默认页面';
+
+    /** pages 表 7 项页级 ACL 列 => 对应配置键类型（唯一事实来源） */
+    private const ACL_MAP = [
+        'acl_read'         => 'read',
+        'acl_edit'         => 'edit',
+        'acl_history'      => 'history',
+        'acl_diff'         => 'diff',
+        'acl_backlinks'    => 'backlinks',
+        'acl_acl'          => 'perms',
+        'acl_contributors' => 'contributors',
+    ];
 
     /** 查询某页面的编辑锁记录 */
     private static function findEditLock(string $tag): ?array
@@ -633,31 +696,31 @@ final class PageController
     /** 对外页面负载 */
     private static function payload(array $p): array
     {
-        $creator = null;
-        $creatorNickname = null;
-        if (!empty($p['created_by'])) {
-            $st = Database::pdo()->prepare('SELECT ' . Database::qi('username') . ', ' . Database::qi('nickname') . ' FROM ' . Database::qi('users') . ' WHERE id = ?');
-            $st->execute([(int)$p['created_by']]);
-            $row = $st->fetch();
-            if ($row) {
-                $creator = (string)$row['username'];
-                $creatorNickname = (string)$row['nickname'] !== '' ? (string)$row['nickname'] : null;
+        // 创建者与最后编辑者一次性取回（避免 N+1 查询）
+        $users = [];
+        $ids = array_values(array_unique(array_filter([
+            isset($p['created_by']) ? (int)$p['created_by'] : 0,
+            isset($p['user_id']) ? (int)$p['user_id'] : 0,
+        ])));
+        if ($ids) {
+            $ph = implode(',', array_fill(0, count($ids), '?'));
+            $st = Database::pdo()->prepare(
+                'SELECT ' . Database::qi('id') . ', ' . Database::qi('username') . ', ' . Database::qi('nickname')
+                . ' FROM ' . Database::qi('users') . ' WHERE ' . Database::qi('id') . ' IN (' . $ph . ')'
+            );
+            $st->execute($ids);
+            foreach ($st->fetchAll() as $r) {
+                $users[(int)$r['id']] = [(string)$r['username'], (string)$r['nickname']];
             }
         }
-        $lastEditor = null;
-        $lastNickname = null;
-        if (!empty($p['user_id'])) {
-            $st = Database::pdo()->prepare('SELECT ' . Database::qi('username') . ', ' . Database::qi('nickname') . ' FROM ' . Database::qi('users') . ' WHERE id = ?');
-            $st->execute([(int)$p['user_id']]);
-            $row = $st->fetch();
-            if ($row) {
-                $lastEditor = (string)$row['username'];
-                $lastNickname = (string)$row['nickname'] !== '' ? (string)$row['nickname'] : null;
-            }
-        }
+        $createdById  = isset($p['created_by']) ? (int)$p['created_by'] : 0;
+        $lastEditorId = isset($p['user_id']) ? (int)$p['user_id'] : 0;
+        [$creator, $creatorNickname]     = $users[$createdById]  ?? [null, null];
+        [$lastEditor, $lastNickname]     = $users[$lastEditorId] ?? [null, null];
         return [
             'id'         => (int)$p['id'],
             'tag'        => (string)$p['tag'],
+            'group'      => (string)($p['group'] ?? self::DEFAULT_GROUP),
             'title'      => (string)$p['title'],
             'body'       => (string)$p['body'],
             'style'      => (string)($p['style'] ?? ''),
@@ -779,6 +842,17 @@ final class PageController
     private static function subscriberCount(int $pageId): int
     {
         $st = Database::pdo()->prepare('SELECT COUNT(*) FROM ' . Database::qi('watchers') . ' WHERE ' . Database::qi('page_id') . ' = ?');
+        $st->execute([$pageId]);
+        return (int)$st->fetchColumn();
+    }
+
+    /** 贡献者数量（轻量：仅计数，供页面视图展示；明细走 page.contributors） */
+    private static function contributorCount(int $pageId): int
+    {
+        $st = Database::pdo()->prepare(
+            'SELECT COUNT(DISTINCT ' . Database::qi('user_id') . ') FROM ' . Database::qi('revisions')
+            . ' WHERE ' . Database::qi('page_id') . ' = ? AND ' . Database::qi('user_id') . ' IS NOT NULL'
+        );
         $st->execute([$pageId]);
         return (int)$st->fetchColumn();
     }

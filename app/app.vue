@@ -6,7 +6,7 @@ useHead({
     { name: 'og:type', content: 'website' }
   ],
   link: [
-    { rel: 'icon', href: '/favicon.ico' }
+    { rel: 'icon', href: '/nuxtwiki.svg' }
   ]
 })
 </script>

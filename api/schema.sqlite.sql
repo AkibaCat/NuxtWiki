@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS pages (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   tag         TEXT NOT NULL UNIQUE,
+  [group]     TEXT NOT NULL DEFAULT '默认页面',
   title       TEXT NOT NULL,
   body        TEXT NOT NULL,
   style       TEXT NOT NULL DEFAULT '',

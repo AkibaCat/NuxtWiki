@@ -5,6 +5,7 @@ const { user, ready, site, registrationOpen, init, logout } = useAuth()
 const { t } = useI18n()
 const route = useRoute()
 const { override } = useWikiTitle()
+const api = useApi()
 
 // 站点显示语言：init 完成后按其默认语言设置 locale（无浏览器记忆时）
 const { applyDefault } = useWikiLocale()
@@ -41,6 +42,35 @@ const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 const onTocClick = (id: string) => {
   scrollToHeading(id)
   tocClose()
+}
+
+// ==================== 移动端「页面浏览」弹窗：按分组排列 + 顶部筛选框 ====================
+const browseModal = ref(false)
+const browsePages = ref<any[]>([])
+const browseQuery = ref('')
+const browseMode = ref<'page' | 'group'>('page')
+const groupedBrowse = computed(() => {
+  const q = browseQuery.value.trim().toLowerCase()
+  if (browseMode.value === 'group') {
+    const groups = groupByPages(browsePages.value)
+    if (!q) return groups
+    return groups.filter(([name]) => name.toLowerCase().includes(q))
+  }
+  let list = browsePages.value
+  if (q) list = list.filter((p) => (p.title || '').toLowerCase().includes(q) || (p.tag || '').toLowerCase().includes(q))
+  return groupByPages(list)
+})
+const browseVisible = computed(
+  () => groupedBrowse.value.length > 0 || (browseMode.value === 'page' && !browseQuery.value.trim() && browsePages.value.length > 0)
+)
+const openBrowse = async () => {
+  browseQuery.value = ''
+  browseModal.value = true
+  // 首次打开时加载全部分页；之后复用缓存
+  if (!browsePages.value.length) {
+    const r = await api.get('page.list')
+    if (r.ok) browsePages.value = (r.data as any[]) ?? []
+  }
 }
 
 const routeTitle = computed(() => {
@@ -148,7 +178,7 @@ const userMenu = computed(() => {
     <UHeader>
       <template #left>
         <NuxtLink to="/" class="flex items-center gap-2.5 shrink-0">
-          <img src="/favicon.ico" :alt="site?.name || 'NuxtWiki'" class="h-7 w-7 shrink-0" />
+          <img src="/nuxtwiki.svg" :alt="site?.name || 'NuxtWiki'" class="h-7 w-7 shrink-0" />
           <span class="text-lg font-bold text-(--ui-text-highlighted)">{{ site?.name || 'NuxtWiki' }}</span>
         </NuxtLink>
       </template>
@@ -230,16 +260,27 @@ const userMenu = computed(() => {
       class="xl:hidden sticky top-(--ui-header-height) z-40 border-b border-(--ui-border) bg-(--ui-bg)"
     >
       <div class="relative flex h-10 items-center justify-between px-2">
-        <UButton
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          :label="t('toc.title')"
-          :icon="tocOpen ? 'i-lucide-chevron-down' : 'i-lucide-list'"
-          :icon-last="true"
-          :aria-expanded="tocOpen"
-          @click="tocToggle"
-        />
+        <div class="flex items-center">
+          <!-- 页面浏览：按分组排列的页面列表弹窗 -->
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            icon="i-lucide-layout-grid"
+            :label="t('groups.browse')"
+            @click="openBrowse"
+          />
+          <UButton
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :label="t('toc.title')"
+            :icon="tocOpen ? 'i-lucide-chevron-down' : 'i-lucide-list'"
+            :icon-last="true"
+            :aria-expanded="tocOpen"
+            @click="tocToggle"
+          />
+        </div>
         <UButton
           color="neutral"
           variant="ghost"
@@ -302,5 +343,53 @@ const userMenu = computed(() => {
         />
       </template>
     </UFooter>
+
+    <!-- 移动端「页面浏览」弹窗：顶部筛选框 + 按分组排列 -->
+    <UModal v-model:open="browseModal" scrollable>
+      <template #content>
+        <UCard>
+          <template #header>
+            <div class="flex items-center gap-2">
+              <span class="font-semibold">{{ t('groups.browse') }}</span>
+              <div class="flex items-center gap-1 ml-auto">
+                <UInput
+                  v-model="browseQuery"
+                  size="xs"
+                  icon="i-lucide-search"
+                  class="w-40"
+                  :placeholder="browseMode === 'group' ? t('groups.groupFilter') : t('groups.pageFilter')"
+                />
+                <UButton
+                  icon="i-lucide-list-filter"
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  class="shrink-0"
+                  @click="browseMode = browseMode === 'group' ? 'page' : 'group'"
+                >
+                  {{ browseMode === 'group' ? t('groups.byGroup') : t('groups.byPage') }}
+                </UButton>
+              </div>
+            </div>
+          </template>
+          <div v-if="browseVisible" class="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+            <div v-for="[g, list] in groupedBrowse" :key="g">
+              <p class="mb-1 text-xs font-semibold text-(--ui-muted)">{{ g }}</p>
+              <NuxtLink
+                v-for="p in list"
+                :key="p.tag"
+                :to="`/${p.tag}`"
+                class="flex items-center justify-between rounded-md px-2 py-1.5 text-sm no-underline transition-colors hover:bg-(--ui-bg-elevated) hover:text-(--ui-primary)"
+                @click="browseModal = false"
+              >
+                <span class="truncate">{{ p.title }}</span>
+                <span class="ml-2 shrink-0 text-xs text-(--ui-muted)">{{ p.tag }}</span>
+              </NuxtLink>
+            </div>
+          </div>
+          <div v-else class="py-10 text-center text-(--ui-muted)">{{ t('groups.empty') }}</div>
+        </UCard>
+      </template>
+    </UModal>
   </div>
 </template>

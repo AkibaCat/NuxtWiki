@@ -56,6 +56,28 @@ const loadAllPages = async () => {
   if (r.ok) allPages.value = (r.data as any[]) ?? []
 }
 
+// 侧边栏筛选：顶部输入框（右侧切换按「分组」或「页面」筛选）
+const sideMode = ref<'page' | 'group'>('page')
+const sideQuery = ref('')
+// 页面模式按标题/tag 过滤页面后归组；分组模式先按分组名过滤组
+const groupedSidebar = computed(() => {
+  const q = sideQuery.value.trim().toLowerCase()
+  if (sideMode.value === 'group') {
+    const groups = groupByPages(allPages.value)
+    if (!q) return groups
+    return groups.filter(([name]) => name.toLowerCase().includes(q))
+  }
+  let list = allPages.value
+  if (q) list = list.filter((p) => (p.title || '').toLowerCase().includes(q) || (p.tag || '').toLowerCase().includes(q))
+  return groupByPages(list)
+})
+const sidebarHasResults = computed(() => {
+  const q = sideQuery.value.trim()
+  if (groupedSidebar.value.length) return true
+  // 分组模式下：分组名不命中即无结果；页面模式下空关键词且有页面视为有结果（空列表时归组为空）
+  return sideMode.value === 'page' && !q && allPages.value.length > 0
+})
+
 // 返回顶部：滚动进度 + 显示控制
 const scrollProgress = ref(0)
 const showBackTop = ref(false)
@@ -158,16 +180,42 @@ const toggleWatch = async () => {
             <span>{{ t('nav.pages') }}</span>
             <NuxtLink to="/pages" class="text-xs font-normal text-(--ui-primary) no-underline hover:opacity-80">{{ t('wiki.all') }}</NuxtLink>
           </p>
-          <nav v-if="allPages.length">
-            <NuxtLink
-              v-for="p in allPages"
-              :key="p.tag"
-              :to="`/${p.tag}`"
-              class="block py-0.5 truncate no-underline transition-colors"
-              :class="p.tag === page.page.tag ? 'text-(--ui-primary) font-medium' : 'text-(--ui-muted) hover:text-(--ui-primary)'"
-            >{{ p.title }}</NuxtLink>
+          <div class="mb-2 flex items-center gap-1">
+            <UInput
+              v-model="sideQuery"
+              size="xs"
+              icon="i-lucide-search"
+              class="min-w-0 flex-1"
+              :placeholder="sideMode === 'group' ? t('groups.groupFilter') : t('groups.pageFilter')"
+            />
+            <UTooltip :text="sideMode === 'group' ? t('groups.byPage') : t('groups.byGroup')">
+              <UButton
+                icon="i-lucide-list-filter"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                class="shrink-0"
+                :aria-label="t('groups.byPage')"
+                @click="sideMode = sideMode === 'group' ? 'page' : 'group'"
+              >
+                {{ sideMode === 'group' ? t('groups.byGroup') : t('groups.byPage') }}
+              </UButton>
+            </UTooltip>
+          </div>
+          <nav v-if="sidebarHasResults">
+            <template v-for="[g, list] in groupedSidebar" :key="g">
+              <hr class="mt-2 h-px bg-gray-300 border-0 dark:bg-gray-700" />
+              <p class="mt-2 first:mt-0 text-lg font-semibold text-(--ui-muted)">{{ g }}</p>
+              <NuxtLink
+                v-for="p in list"
+                :key="p.tag"
+                :to="`/${p.tag}`"
+                class="block py-0.5 truncate no-underline transition-colors"
+                :class="p.tag === page.page.tag ? 'text-(--ui-primary) font-medium' : 'text-(--ui-muted) hover:text-(--ui-primary)'"
+              >{{ p.title }}</NuxtLink>
+            </template>
           </nav>
-          <p v-else class="text-(--ui-muted)">{{ t('wiki.noPages') }}</p>
+          <p v-else class="text-(--ui-muted)">{{ t('groups.empty') }}</p>
         </div>
       </aside>
 
@@ -201,7 +249,7 @@ const toggleWatch = async () => {
             <span>·</span>
             <span>{{ t('wiki.subscribers') }} {{ formatCount(page.subscriber_count) }}</span>
             <span>·</span>
-            <span>{{ t('wiki.contributors') }} {{ page.contributors?.length || 0 }}</span>
+            <span>{{ t('wiki.contributors') }} {{ page.contributor_count || 0 }}</span>
             <span class="w-full sm:w-auto">{{ t('wiki.lastModified') }} {{ formatDate(page.page.updated_at) }}</span>
             <span v-if="page.page.last_editor"> {{ t('wiki.lastEditor') }} {{ page.page.last_nickname || page.page.last_editor }}</span>
           </div>

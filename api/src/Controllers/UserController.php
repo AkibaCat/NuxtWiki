@@ -245,6 +245,7 @@ final class UserController
             . 'WHERE id = ?'
         );
         $st->execute([$nickname, $bio, $avatar, $email, $socialJson, Database::now(), (int)$u['id']]);
+        Auth::forgetUser();
         Response::data(['user' => Auth::publicUser(Auth::user())]);
     }
 
@@ -284,6 +285,7 @@ final class UserController
             'UPDATE ' . Database::qi('users') . ' SET ' . Database::qi('avatar') . ' = ?, ' . Database::qi('updated_at') . ' = ? WHERE ' . Database::qi('id') . ' = ?'
         );
         $st->execute(['/api/uploads/avatars/' . $filename, Database::now(), (int)$u['id']]);
+        Auth::forgetUser();
         Response::data(['user' => Auth::publicUser(Auth::user())]);
     }
 

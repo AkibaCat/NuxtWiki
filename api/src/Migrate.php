@@ -14,6 +14,15 @@ final class Migrate
             return;
         }
         $done = true;
+
+        // 迁移是「追加式、幂等」的 schema 变更，部署升级后执行一次即可。
+        // 用版本号标记文件门控，避免每次请求都连库做 SHOW COLUMNS / CREATE TABLE
+        //（在外部/慢速数据库场景下该项约占总请求耗时的大半，拖慢所有页面）。
+        $marker = self::markerFile();
+        if (is_file($marker) && trim((string)file_get_contents($marker)) === NUVTWIKI_VERSION) {
+            return;
+        }
+
         try {
             $db = Database::pdo();
             $driver = Database::driver();
@@ -50,6 +59,11 @@ final class Migrate
             ]);
             self::addColumns($db, $driver, 'revisions', [
                 'style' => 'LONGTEXT',
+            ]);
+
+            // 1.3) pages 补充页面分组（默认「默认页面」）
+            self::addColumns($db, $driver, 'pages', [
+                'group' => 'VARCHAR(64) NOT NULL DEFAULT \'默认页面\'',
             ]);
 
             // 2) 注册码表
@@ -100,10 +114,23 @@ final class Migrate
                     . ')'
                 );
             }
+
+            // 迁移成功后才记录版本，失败则不写，下次请求会重试
+            $dir = dirname($marker);
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0777, true);
+            }
+            @file_put_contents($marker, NUVTWIKI_VERSION);
         } catch (Throwable $e) {
             // 迁移失败不阻断主流程（记录日志，交由安装/重建解决）
             error_log('[NuxtWiki] migrate: ' . $e->getMessage());
         }
+    }
+
+    /** 迁移标记文件（api/data/.migrated），请求时仅作一次本地文件读取，不打库 */
+    private static function markerFile(): string
+    {
+        return __DIR__ . '/../data/.migrated';
     }
 
     /** 补充缺失列（SQLite 用 PRAGMA table_info，MySQL 用 SHOW COLUMNS），返回实际新增的列名 */

@@ -21,7 +21,7 @@ const { enabled: autosave } = useEditorAutosave()
 // 已打开的页面标签 + 当前激活标签（editorMode 为会话内的编辑器视图状态，不持久化）
 // dirty：自上次保存到页面后是否有未保存编辑；baseUpdatedAt：内容加载进编辑器时的服务器时间（用于检测他人新提交）
 // saved*：上次保存 / 加载时的内容快照，用于判断编辑是否已撤销回原样（一致则清除 dirty）
-const tabs = ref<{ tag: string; title: string; body: string; style: string; comment: string; editorMode: 'content' | 'style'; dirty: boolean; baseUpdatedAt: string; savedTitle: string; savedBody: string; savedStyle: string }[]>([])
+const tabs = ref<{ tag: string; title: string; group: string; body: string; style: string; comment: string; editorMode: 'content' | 'style'; dirty: boolean; baseUpdatedAt: string; savedTitle: string; savedGroup: string; savedBody: string; savedStyle: string; savedComment: string }[]>([])
 const activeTag = ref('')
 
 onMounted(async () => {
@@ -30,6 +30,7 @@ onMounted(async () => {
     forbidden.value = true
     return
   }
+  loadGroups()
   // 开启自动保存时恢复上次的工作区草稿
   if (autosave.value) {
     await restoreWorkspace()
@@ -68,6 +69,7 @@ const restoreWorkspace = async () => {
   const restored = (d.tabs as any[]).map((tab) => ({
     tag: tab.tag,
     title: tab.title,
+    group: tab.group || DEFAULT_GROUP,
     body: tab.body,
     style: tab.style ?? '',
     comment: tab.comment ?? '',
@@ -76,8 +78,10 @@ const restoreWorkspace = async () => {
     baseUpdatedAt: tab.baseUpdatedAt ?? '',
     // saved* 先留空，恢复后拉取服务器内容再比对，正确判定「未保存到页面的编辑」
     savedTitle: '',
+    savedGroup: '',
     savedBody: '',
     savedStyle: '',
+    savedComment: '',
   }))
   // 恢复前先获取编辑锁：他人正编辑的页面跳过恢复
   const kept: typeof tabs.value = []
@@ -95,19 +99,23 @@ const restoreWorkspace = async () => {
     const pd = pr.data as any
     if (pr.ok && pd?.exists) {
       tab.savedTitle = pd.page.title ?? ''
+      tab.savedGroup = pd.page.group || DEFAULT_GROUP
       tab.savedBody = pd.page.body ?? ''
       tab.savedStyle = pd.page.style ?? ''
+      tab.savedComment = pd.page.comment ?? ''
       if (tab.baseUpdatedAt && toTime(pd.page.updated_at) > toTime(tab.baseUpdatedAt)) {
         queued.push(tab.tag)
       }
     } else {
       // 页面尚不存在（新建草稿）：基线为空页面
       tab.savedTitle = tab.tag
+      tab.savedGroup = DEFAULT_GROUP
       tab.savedBody = ''
       tab.savedStyle = ''
+      tab.savedComment = ''
     }
-    // 工作区内容与已保存内容不一致 → 未保存到页面的编辑，显示 *
-    tab.dirty = tab.title !== tab.savedTitle || tab.body !== tab.savedBody || tab.style !== tab.savedStyle
+    // 工作区内容与已保存内容不一致 → 未保存到页面的编辑，显示 *（分组即时生效，不纳入判定）
+    tab.dirty = tab.title !== tab.savedTitle || tab.comment !== tab.savedComment || tab.body !== tab.savedBody || tab.style !== tab.savedStyle
   }
   reloadQueue.value = queued
   nextConflict()
@@ -185,15 +193,18 @@ const openTag = async (tag: string) => {
   tabs.value.push({
     tag,
     title: exists ? d.page.title : tag,
+    group: exists ? (d.page.group || DEFAULT_GROUP) : DEFAULT_GROUP,
     body: exists ? d.page.body : '',
     style: exists ? (d.page.style ?? '') : '',
-    comment: '',
+    comment: exists ? (d.page.comment ?? '') : '',
     editorMode: 'content',
     dirty: false,
     baseUpdatedAt: exists ? (d.page.updated_at ?? '') : '',
     savedTitle: exists ? d.page.title : tag,
+    savedGroup: exists ? (d.page.group || DEFAULT_GROUP) : DEFAULT_GROUP,
     savedBody: exists ? d.page.body : '',
     savedStyle: exists ? (d.page.style ?? '') : '',
+    savedComment: exists ? (d.page.comment ?? '') : '',
   })
 }
 
@@ -201,9 +212,10 @@ const openTag = async (tag: string) => {
 const activeTab = computed(() => tabs.value.find((t) => t.tag === activeTag.value) || null)
 
 // 标记某标签已修改：按与已保存快照的比对结果刷新 dirty，并（开启自动保存时）延迟写入工作区
-const markDirty = (tab: { title: string; body: string; style: string; savedTitle: string; savedBody: string; savedStyle: string; dirty: boolean } | null | undefined) => {
+const markDirty = (tab: { title: string; group: string; comment: string; body: string; style: string; savedTitle: string; savedGroup: string; savedComment: string; savedBody: string; savedStyle: string; dirty: boolean } | null | undefined) => {
   if (!tab) return
-  tab.dirty = tab.title !== tab.savedTitle || tab.body !== tab.savedBody || tab.style !== tab.savedStyle
+  // 分组经 page.set-group 即时生效，不纳入「未保存编辑」判定
+  tab.dirty = tab.title !== tab.savedTitle || tab.comment !== tab.savedComment || tab.body !== tab.savedBody || tab.style !== tab.savedStyle
   scheduleAutosave()
 }
 
@@ -235,13 +247,17 @@ const confirmReload = async () => {
   const d = r.data as any
   if (r.ok && d?.exists) {
     tab.title = d.page.title
+    tab.group = d.page.group || DEFAULT_GROUP
     tab.body = d.page.body
     tab.style = d.page.style ?? ''
+    tab.comment = d.page.comment ?? ''
     tab.dirty = false
     tab.baseUpdatedAt = d.page.updated_at ?? ''
     tab.savedTitle = d.page.title
+    tab.savedGroup = d.page.group || DEFAULT_GROUP
     tab.savedBody = d.page.body
     tab.savedStyle = d.page.style ?? ''
+    tab.savedComment = d.page.comment ?? ''
   }
   nextConflict()
 }
@@ -270,7 +286,63 @@ onUnmounted(() => setTitle(null))
 // ==================== 打开页面弹窗 ====================
 const openModal = ref(false)
 const allPages = ref<any[]>([])
+// 已有分组（供工具栏「分组修改」下拉选择）
+const availableGroups = ref<string[]>([])
+const loadGroups = async () => {
+  const r = await api.get('page.list')
+  if (r.ok) {
+    const set = new Set<string>()
+    for (const p of (r.data as any[]) ?? []) set.add(groupOf(p))
+    availableGroups.value = Array.from(set).filter(Boolean).sort()
+  }
+}
 const selected = ref<string[]>([])
+
+// ==================== 分组即时生效 ====================
+// 通过 page.set-group 立即写入分组列（不整体保存正文/标题）；未使用的分组因列表由 page.list 派生而自动消失。
+const groupMenuOpen = ref(false)
+const groupBusy = ref(false)
+
+async function setGroupImmediate(val: string) {
+  const tab = activeTab.value
+  if (!tab) return
+  const g = val.trim()
+  tab.group = g
+  if (groupBusy.value) return
+  if (g === tab.savedGroup) return
+  groupBusy.value = true
+  const r = await api.post('page.set-group', { tag: tab.tag, group: g })
+  groupBusy.value = false
+  tab.savedGroup = g
+  if (g && !availableGroups.value.includes(g)) availableGroups.value = [...availableGroups.value, g].sort()
+  groupMenuOpen.value = false
+  toast.add({ title: r.ok ? t('editor.groupSaved') : t('editor.groupSaveFailed'), color: r.ok ? 'success' : 'error' })
+}
+function onGroupInput(v: string | null) {
+  const tab = activeTab.value
+  if (!tab) return
+  tab.group = v ?? ''
+  // 命中已有分组即为选中 → 即时提交
+  if (v != null && availableGroups.value.includes(v.trim())) setGroupImmediate(v.trim())
+}
+function onCreateGroup(item: string) {
+  setGroupImmediate(item)
+}
+function onGroupKeyEnter() {
+  const tab = activeTab.value
+  if (!tab) return
+  const g = tab.group.trim()
+  if (!g) return
+  setGroupImmediate(g)
+}
+function onGroupBlur() {
+  const tab = activeTab.value
+  if (!tab) return
+  const g = tab.group.trim()
+  if (!g) return
+  if (!availableGroups.value.includes(g)) availableGroups.value = [...availableGroups.value, g].sort()
+  setGroupImmediate(g)
+}
 const listLoading = ref(false)
 const openPicker = async () => {
   selected.value = []
@@ -294,7 +366,7 @@ const createPage = async () => {
   }
   // 新建页面同样获取编辑锁，防止他人并发创建同一页面
   if (!(await acquireLock(tag))) return
-  tabs.value.push({ tag, title: tag, body: '', style: '', comment: '', editorMode: 'content', dirty: false, baseUpdatedAt: '', savedTitle: tag, savedBody: '', savedStyle: '' })
+  tabs.value.push({ tag, title: tag, group: DEFAULT_GROUP, body: '', style: '', comment: '', editorMode: 'content', dirty: false, baseUpdatedAt: '', savedTitle: tag, savedGroup: DEFAULT_GROUP, savedBody: '', savedStyle: '', savedComment: '' })
   activeTag.value = tag
 }
 
@@ -382,13 +454,15 @@ const save = async () => {
     return
   }
   saving.value = true
-  const r = await api.post('page.save', { tag: tab.tag, title: tab.title, body: tab.body, style: tab.style, comment: tab.comment })
+  const r = await api.post('page.save', { tag: tab.tag, title: tab.title, group: tab.group, body: tab.body, style: tab.style, comment: tab.comment })
   saving.value = false
   if (r.ok) {
     tab.dirty = false
     tab.savedTitle = tab.title
+    tab.savedGroup = tab.group
     tab.savedBody = tab.body
     tab.savedStyle = tab.style
+    tab.savedComment = tab.comment
     if (r.data?.updated_at) tab.baseUpdatedAt = r.data.updated_at
     savedTag.value = tab.tag
     saveModal.value = true
@@ -454,15 +528,40 @@ watch(() => [styleCompile.value.css, previewOn.value], () => {
 
     <!-- 编辑器主体 -->
     <div v-else-if="activeTab" class="flex min-h-0 flex-1 flex-col">
-      <!-- 工具栏一行：页面名 + 页面标题 -->
-      <div class="flex items-center gap-3 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2">
+      <!-- 工具栏一行：页面名 + 分组修改 + 页面标题 + 编辑说明 -->
+      <div class="flex items-center gap-2 border-b border-(--ui-border) bg-(--ui-bg-elevated) px-4 py-2">
         <span class="text-xs font-semibold text-(--ui-muted) shrink-0">{{ activeTag }}</span>
+        <UInputMenu
+          :model-value="activeTab.group"
+          :items="availableGroups"
+          mode="combobox"
+          :create-item="{ when: 'always', position: 'bottom' }"
+          size="sm"
+          class="w-40 shrink-0"
+          :placeholder="t('editor.groupPlaceholder')"
+          v-model:open="groupMenuOpen"
+          @update:model-value="onGroupInput"
+          @create="onCreateGroup"
+          @keydown.enter="onGroupKeyEnter"
+          @blur="onGroupBlur"
+        >
+          <template #create-item-label="{ item }">
+            {{ t('editor.groupCreateLabel', { group: item }) }}
+          </template>
+        </UInputMenu>
         <UInput
           :model-value="activeTab.title"
           size="sm"
-          class="w-full"
+          class="min-w-0 flex-1"
           :placeholder="t('editor.pageTitle')"
           @update:model-value="(v: string | null) => { if (activeTab && v != null) { activeTab.title = v; markDirty(activeTab) } }"
+        />
+        <UInput
+          :model-value="activeTab.comment"
+          size="sm"
+          class="w-44 shrink-0"
+          :placeholder="t('editor.commentPlaceholder')"
+          @update:model-value="(v: string | null) => { if (activeTab && v != null) { activeTab.comment = v; markDirty(activeTab) } }"
         />
       </div>
       <!-- 工具栏二行：左快捷语法，右保存/预览 -->

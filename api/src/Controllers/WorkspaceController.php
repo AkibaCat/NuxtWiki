@@ -82,6 +82,7 @@ final class WorkspaceController
         return [
             'tag'           => (string)($t['tag'] ?? ''),
             'title'         => (string)($t['title'] ?? ''),
+            'group'         => (string)($t['group'] ?? '默认页面'),
             'body'          => mb_substr((string)($t['body'] ?? ''), 0, 200000),
             'style'         => mb_substr((string)($t['style'] ?? ''), 0, 200000),
             'comment'       => (string)($t['comment'] ?? ''),

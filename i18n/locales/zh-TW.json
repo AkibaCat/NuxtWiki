@@ -42,6 +42,14 @@
     "title": "此頁目錄",
     "backToTop": "返回頂部"
   },
+  "groups": {
+    "browse": "頁面瀏覽",
+    "byPage": "頁面",
+    "byGroup": "分組",
+    "pageFilter": "篩選頁面…",
+    "groupFilter": "篩選分組…",
+    "empty": "沒有符合的分組"
+  },
   "footer": {
     "builtWith": "基於 Nuxt UI 與 PHP/MySQL",
     "rss": "RSS 訂閱"
@@ -250,6 +258,11 @@
     "createPage": "建立頁面",
     "emptyWorkspace": "未開啟任何頁面編輯，請選擇需要編輯的頁面",
     "pageTitle": "頁面標題",
+    "groupPlaceholder": "選擇或輸入分組",
+    "groupCreateLabel": "建立分組「{group}」",
+    "groupSaved": "分組修改成功",
+    "groupSaveFailed": "分組修改失敗",
+    "commentPlaceholder": "本次編輯說明…",
     "closePreview": "關閉預覽",
     "preview": "預覽",
     "bodyPlaceholder": "使用 Markdown 語法編寫內容…",
